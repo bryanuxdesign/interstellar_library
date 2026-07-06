@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# Cursor session artifacts (debug logs, plans)
+.cursor/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

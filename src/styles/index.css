@@ -1,0 +1,117 @@
+@import './tokens.css';
+@import 'tailwindcss';
+
+@theme {
+  --color-void: #0a0a0b;
+  --color-deep: #050506;
+  --color-panel: rgba(18, 18, 20, 0.72);
+  --color-raised: rgba(26, 26, 30, 0.88);
+  --color-sharp: rgba(255, 255, 255, 0.08);
+  --color-strong: rgba(255, 255, 255, 0.16);
+
+  --color-active: #22e06b;
+  --color-neutral: #6b7280;
+  --color-alert: #ff453a;
+
+  --color-ink: #f4f5f7;
+  --color-ink-soft: #b4b9c2;
+  --color-ink-faint: #8b93a1;
+
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--canvas-void);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  overflow: hidden;
+}
+
+/* Utilitarian scrollbars for dossier / overflow panels */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Numeric telemetry treatment */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Fine uppercase labels used across the command interface */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+@keyframes pin-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes soft-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-soft-in {
+  animation: soft-in 0.6s ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

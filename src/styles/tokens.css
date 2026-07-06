@@ -1,0 +1,24 @@
+:root {
+  /* The Canvas — the void of space */
+  --canvas-void: #0a0a0b;
+  --canvas-deep: #050506;
+
+  /* Structural surfaces */
+  --surface-panel: rgba(18, 18, 20, 0.72);
+  --surface-raised: rgba(26, 26, 30, 0.88);
+  --border-sharp: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* The Telemetry Colorway */
+  --telemetry-active: #22e06b; /* live links, highlights, pulse */
+  --telemetry-neutral: #6b7280; /* retired hardware, structural UI */
+  --telemetry-alert: #ff453a; /* failures, impacts, anomalies */
+
+  /* Typography tones */
+  --text-primary: #f4f5f7;
+  --text-secondary: #b4b9c2;
+  --text-tertiary: #8b93a1;
+
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
