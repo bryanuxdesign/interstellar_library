@@ -1,4 +1,4 @@
-# Interstellar Archive
+# Interstellar Library
 
 An immersive, high-fidelity digital encyclopedia cataloguing humanity's surface footprint on other worlds. Real hardware launched by global space agencies — active rovers, retired landers, and impact remnants — is projected onto an anatomically accurate 3D model of the Moon, letting you trace the physical history of interplanetary exploration.
 
