@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AssetStatus, Coordinates } from '@/types';
 
-export const ALL_STATUSES: AssetStatus[] = ['active', 'decommissioned', 'impact'];
+export const ALL_STATUSES: AssetStatus[] = ['active', 'decommissioned', 'impact', 'planned'];
 
 interface CameraTarget {
   coordinates: Coordinates;
@@ -18,6 +18,8 @@ interface AppState {
   activeEventId: string | null;
   visibleStatuses: AssetStatus[];
   cameraTarget: CameraTarget | null;
+  /** When true, missions and timeline run newest → oldest. */
+  chronologyReversed: boolean;
 
   setActivePlanet: (planetId: string | null) => void;
   setHoveredMission: (missionId: string | null) => void;
@@ -27,6 +29,7 @@ interface AppState {
   resetFilters: () => void;
   flyTo: (coordinates: Coordinates, altitude?: number) => void;
   setActiveEvent: (eventId: string | null) => void;
+  toggleChronologyReversed: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -36,6 +39,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeEventId: null,
   visibleStatuses: [...ALL_STATUSES],
   cameraTarget: null,
+  chronologyReversed: false,
 
   setActivePlanet: (planetId) =>
     set({
@@ -69,4 +73,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   setActiveEvent: (eventId) => set({ activeEventId: eventId }),
+
+  toggleChronologyReversed: () =>
+    set((s) => ({ chronologyReversed: !s.chronologyReversed })),
 }));

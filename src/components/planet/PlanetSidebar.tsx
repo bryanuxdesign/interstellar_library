@@ -7,11 +7,14 @@ import { STATUS_COLORS } from '@/three/constants';
 import { computeTelemetry } from '@/data/telemetry';
 import { formatMass } from '@/utils/format';
 import { countryFlag } from '@/utils/flags';
+import { ChronologyToggle } from '@/components/ui/ChronologyToggle';
+import { missionCameraAltitude } from '@/utils/missionCamera';
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
   active: 'Active',
   decommissioned: 'Retired',
   impact: 'Impacts',
+  planned: 'Planned',
 };
 
 interface PlanetSidebarProps {
@@ -29,6 +32,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const flyTo = useAppStore((s) => s.flyTo);
+  const chronologyReversed = useAppStore((s) => s.chronologyReversed);
 
   const telemetry = useMemo(() => computeTelemetry(planet.id), [planet.id]);
 
@@ -36,13 +40,16 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
     () =>
       missions
         .filter((m) => visibleStatuses.includes(m.status))
-        .sort((a, b) => a.landingDate.localeCompare(b.landingDate)),
-    [missions, visibleStatuses],
+        .sort((a, b) => {
+          const cmp = a.landingDate.localeCompare(b.landingDate);
+          return chronologyReversed ? -cmp : cmp;
+        }),
+    [missions, visibleStatuses, chronologyReversed],
   );
 
   const handleSelect = (mission: Mission) => {
     selectMission(mission.id);
-    flyTo(mission.coordinates);
+    flyTo(mission.coordinates, missionCameraAltitude(mission));
     setOpen(false);
   };
 
@@ -111,6 +118,10 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
         </div>
 
         {/* Mission registry */}
+        <div className="flex items-center justify-between border-b border-sharp px-4 py-2">
+          <span className="eyebrow">Mission Registry</span>
+          <ChronologyToggle compact />
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
           {visibleMissions.map((mission) => {
             const color = STATUS_COLORS[mission.status];

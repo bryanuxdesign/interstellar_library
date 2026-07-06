@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import type { Coordinates } from '@/types';
+import type { Coordinates, Mission } from '@/types';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -31,4 +31,18 @@ export function latLngToVector3(
  */
 export function surfaceNormal(coords: Coordinates, target = new Vector3()): Vector3 {
   return latLngToVector3(coords, 1, target).normalize();
+}
+
+/**
+ * Centroid of near-side landing sites — where the densest cluster of hardware
+ * sits (Apollo, Surveyor, Chang'e near-side, etc.). Excludes far-side outliers.
+ */
+export function computeNearSideCluster(missions: Mission[]): Coordinates {
+  const landed = missions.filter((m) => m.status !== 'planned');
+  const pool = landed.length > 0 ? landed : missions;
+  const nearSide = pool.filter((m) => Math.abs(m.coordinates.lng) <= 90);
+  const set = nearSide.length >= 3 ? nearSide : pool;
+  const lat = set.reduce((s, m) => s + m.coordinates.lat, 0) / set.length;
+  const lng = set.reduce((s, m) => s + m.coordinates.lng, 0) / set.length;
+  return { lat, lng };
 }

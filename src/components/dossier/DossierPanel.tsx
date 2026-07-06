@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { getMissionById } from '@/data/missions';
+import { getVehicleImages } from '@/data/missionImages';
 import { useAppStore } from '@/store/useAppStore';
 import { useMediaQuery } from '@/utils/useMediaQuery';
 import {
@@ -12,6 +13,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SpecRow } from '@/components/ui/SpecRow';
 import { LifespanBar } from './LifespanBar';
 import { ForensicImage } from './ForensicImage';
+import { VehicleGallery } from './VehicleGallery';
 
 export function DossierPanel() {
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
@@ -73,11 +75,22 @@ export function DossierPanel() {
               {mission.summary}
             </p>
 
+            <VehicleGallery
+              images={getVehicleImages(mission.id)}
+              missionName={mission.name}
+            />
+
             {/* Telemetry grid */}
             <div className="grid grid-cols-2 gap-x-5">
               <SpecRow label="Launch" value={formatDate(mission.launchDate)} />
               <SpecRow
-                label={mission.status === 'impact' ? 'Impact' : 'Landing'}
+                label={
+                  mission.status === 'impact'
+                    ? 'Impact'
+                    : mission.status === 'planned'
+                      ? 'Target Landing'
+                      : 'Landing'
+                }
                 value={formatDate(mission.landingDate)}
               />
               <SpecRow label="Landing Site" value={formatCoordinates(mission.coordinates)} />
@@ -85,10 +98,12 @@ export function DossierPanel() {
             </div>
 
             <div className="mt-1 border-t border-sharp">
-              <LifespanBar
-                planned={mission.plannedLifespanDays}
-                actual={mission.actualLifespanDays}
-              />
+              {mission.status !== 'planned' && (
+                <LifespanBar
+                  planned={mission.plannedLifespanDays}
+                  actual={mission.actualLifespanDays}
+                />
+              )}
             </div>
 
             <div className="border-t border-sharp py-3">

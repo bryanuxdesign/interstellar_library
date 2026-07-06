@@ -8,9 +8,10 @@ import { MissionPin } from '@/components/pins/MissionPin';
 
 interface SceneProps {
   missions: Mission[];
+  planetId: string;
 }
 
-export function Scene({ missions }: SceneProps) {
+export function Scene({ missions, planetId }: SceneProps) {
   const visibleStatuses = useAppStore((s) => s.visibleStatuses);
 
   const visibleMissions = useMemo(
@@ -28,7 +29,7 @@ export function Scene({ missions }: SceneProps) {
       <Stars radius={80} depth={40} count={4000} factor={3} saturation={0} fade speed={0.5} />
 
       <Suspense fallback={<GlobeFallback />}>
-        <CelestialGlobe />
+        <CelestialGlobe planetId={planetId} />
         {visibleMissions.map((mission) => (
           <MissionPin key={mission.id} mission={mission} />
         ))}

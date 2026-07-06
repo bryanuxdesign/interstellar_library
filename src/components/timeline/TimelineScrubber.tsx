@@ -4,6 +4,9 @@ import type { TimelineEvent } from '@/types';
 import { buildTimeline } from '@/data/timeline';
 import { STATUS_COLORS } from '@/three/constants';
 import { useAppStore } from '@/store/useAppStore';
+import { ChronologyToggle } from '@/components/ui/ChronologyToggle';
+import { getMissionById } from '@/data/missions';
+import { missionCameraAltitude } from '@/utils/missionCamera';
 
 interface TimelineScrubberProps {
   planetId: string;
@@ -17,8 +20,14 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
   const selectMission = useAppStore((s) => s.selectMission);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const flyTo = useAppStore((s) => s.flyTo);
+  const chronologyReversed = useAppStore((s) => s.chronologyReversed);
 
   const [hoverId, setHoverId] = useState<string | null>(null);
+
+  const orderedEvents = useMemo(
+    () => (chronologyReversed ? [...events].reverse() : events),
+    [events, chronologyReversed],
+  );
 
   const { minTime, span, minYear, maxYear } = useMemo(() => {
     const times = events.map((e) => new Date(e.date).getTime());
@@ -32,8 +41,15 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
     };
   }, [events]);
 
-  const fraction = (e: TimelineEvent) =>
-    ((new Date(e.date).getTime() - minTime) / span) * 100;
+  const fraction = (e: TimelineEvent) => {
+    const pct = ((new Date(e.date).getTime() - minTime) / span) * 100;
+    return chronologyReversed ? 100 - pct : pct;
+  };
+
+  const decadePosition = (year: number) => {
+    const pct = ((new Date(Date.UTC(year, 0, 1)).getTime() - minTime) / span) * 100;
+    return chronologyReversed ? 100 - pct : pct;
+  };
 
   const decades = useMemo(() => {
     const marks: number[] = [];
@@ -43,26 +59,31 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
   }, [minYear, maxYear]);
 
   const currentIndex = useMemo(
-    () => events.findIndex((e) => e.missionId === selectedMissionId),
-    [events, selectedMissionId],
+    () => orderedEvents.findIndex((e) => e.missionId === selectedMissionId),
+    [orderedEvents, selectedMissionId],
   );
 
   const handleSelect = (event: TimelineEvent) => {
     setActiveEvent(event.id);
     selectMission(event.missionId);
-    flyTo(event.coordinates);
+    const mission = getMissionById(event.missionId);
+    flyTo(event.coordinates, mission ? missionCameraAltitude(mission) : 1.35);
   };
 
   const step = (dir: -1 | 1) => {
-    if (events.length === 0) return;
+    if (orderedEvents.length === 0) return;
     let next: number;
-    if (currentIndex === -1) next = dir === 1 ? 0 : events.length - 1;
-    else next = Math.min(Math.max(currentIndex + dir, 0), events.length - 1);
-    handleSelect(events[next]);
+    if (currentIndex === -1) {
+      next = dir === 1 ? 0 : orderedEvents.length - 1;
+    } else {
+      next = Math.min(Math.max(currentIndex + dir, 0), orderedEvents.length - 1);
+    }
+    handleSelect(orderedEvents[next]);
   };
 
-  const prevDisabled = currentIndex === 0;
-  const nextDisabled = currentIndex === events.length - 1;
+  const prevDisabled = currentIndex <= 0;
+  const nextDisabled =
+    currentIndex === -1 ? false : currentIndex >= orderedEvents.length - 1;
 
   return (
     <motion.div
@@ -73,11 +94,14 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
         selectedMissionId ? 'md:right-[400px]' : 'right-0'
       }`}
     >
-      <div className="flex items-center justify-between px-4 pb-1 pt-3 lg:px-6">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3 lg:px-6">
         <span className="eyebrow">Chronological Scrubber</span>
-        <span className="tabular text-[11px] text-ink-faint">
-          {minYear} — {maxYear}
-        </span>
+        <div className="flex items-center gap-3">
+          <ChronologyToggle compact />
+          <span className="tabular text-[11px] text-ink-faint">
+            {chronologyReversed ? `${maxYear} — ${minYear}` : `${minYear} — ${maxYear}`}
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 px-3 pb-5 pt-4 lg:px-5">
@@ -89,8 +113,7 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
 
           {/* Decade ticks */}
           {decades.map((year) => {
-            const left =
-              ((new Date(Date.UTC(year, 0, 1)).getTime() - minTime) / span) * 100;
+            const left = decadePosition(year);
             if (left < 0 || left > 100) return null;
             return (
               <div

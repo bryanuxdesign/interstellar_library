@@ -34,6 +34,7 @@ interface TelemetryCounterProps {
   suffix?: string;
   decimals?: number;
   accent?: string;
+  compact?: boolean;
 }
 
 export function TelemetryCounter({
@@ -42,6 +43,7 @@ export function TelemetryCounter({
   suffix,
   decimals = 0,
   accent,
+  compact = false,
 }: TelemetryCounterProps) {
   const animated = useCountUp(value);
   const display = animated.toLocaleString('en-US', {
@@ -50,14 +52,20 @@ export function TelemetryCounter({
   });
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="eyebrow">{label}</span>
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="eyebrow truncate">{label}</span>
       <span
-        className="tabular text-4xl font-bold leading-none text-ink sm:text-5xl"
+        className={`tabular font-bold leading-none text-ink ${
+          compact ? 'text-2xl sm:text-3xl' : 'text-4xl sm:text-5xl'
+        }`}
         style={accent ? { color: accent } : undefined}
       >
         {display}
-        {suffix && <span className="ml-1 text-lg text-ink-soft">{suffix}</span>}
+        {suffix && (
+          <span className={`ml-1 text-ink-soft ${compact ? 'text-sm' : 'text-lg'}`}>
+            {suffix}
+          </span>
+        )}
       </span>
     </div>
   );

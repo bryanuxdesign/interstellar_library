@@ -5,6 +5,7 @@ const STATUS_META: Record<AssetStatus, { label: string }> = {
   active: { label: 'Active Link' },
   decommissioned: { label: 'Decommissioned' },
   impact: { label: 'Impact Site' },
+  planned: { label: 'Planned' },
 };
 
 export function StatusBadge({

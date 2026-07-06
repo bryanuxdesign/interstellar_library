@@ -1,12 +1,18 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { Box3, Group, Vector3 } from 'three';
+import { Box3, Group, Mesh, Vector3 } from 'three';
 import { GLOBE_RADIUS } from './constants';
 
-const MODEL_URL = '/models/moon.glb';
+const PLANET_MODELS: Record<string, string> = {
+  moon: '/models/moon.glb',
+  venus: '/models/venus.glb',
+};
+
+const DEFAULT_MODEL = PLANET_MODELS.moon;
 
 interface CelestialGlobeProps {
+  planetId?: string;
   autoRotate?: boolean;
   rotationSpeed?: number;
   radius?: number;
@@ -15,15 +21,16 @@ interface CelestialGlobeProps {
 }
 
 export function CelestialGlobe({
+  planetId = 'moon',
   autoRotate = false,
   rotationSpeed = 0.03,
   radius = GLOBE_RADIUS,
-  rotationOffset = Math.PI,
+  rotationOffset = 0,
 }: CelestialGlobeProps) {
   const ref = useRef<Group>(null);
-  const { scene } = useGLTF(MODEL_URL);
+  const modelUrl = PLANET_MODELS[planetId] ?? DEFAULT_MODEL;
+  const { scene } = useGLTF(modelUrl);
 
-  // Clone and normalise the NASA model to our target radius, centred at origin.
   const model = useMemo(() => {
     const clone = scene.clone(true);
     const box = new Box3().setFromObject(clone);
@@ -35,6 +42,11 @@ export function CelestialGlobe({
     const scale = (radius * 2) / maxDim;
     clone.scale.setScalar(scale);
     clone.position.copy(center.multiplyScalar(-scale));
+    clone.traverse((obj) => {
+      if ((obj as Mesh).isMesh) {
+        (obj as Mesh).raycast = () => {};
+      }
+    });
     return clone;
   }, [scene, radius]);
 
@@ -61,4 +73,5 @@ export function GlobeFallback({ radius = GLOBE_RADIUS }: { radius?: number }) {
   );
 }
 
-useGLTF.preload(MODEL_URL);
+useGLTF.preload(PLANET_MODELS.moon);
+useGLTF.preload(PLANET_MODELS.venus);

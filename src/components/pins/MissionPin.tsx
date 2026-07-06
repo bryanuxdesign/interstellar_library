@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, Mesh, Quaternion, Vector3 } from 'three';
@@ -7,6 +7,7 @@ import { latLngToVector3 } from '@/three/coordinateUtils';
 import { GLOBE_RADIUS, STATUS_COLORS } from '@/three/constants';
 import { useAppStore } from '@/store/useAppStore';
 import { PinHoverCard } from './PinHoverCard';
+import { FlybyTrack, isFlybyMission } from './FlybyTrack';
 
 const UP = new Vector3(0, 0, 1);
 const prefersReducedMotion =
@@ -18,6 +19,10 @@ interface MissionPinProps {
 }
 
 export function MissionPin({ mission }: MissionPinProps) {
+  if (isFlybyMission(mission)) {
+    return <FlybyTrack mission={mission} />;
+  }
+
   const hoveredMissionId = useAppStore((s) => s.hoveredMissionId);
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
@@ -38,12 +43,6 @@ export function MissionPin({ mission }: MissionPinProps) {
   const pulseRef = useRef<Mesh>(null);
   const markerRef = useRef<Group>(null);
 
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7403/ingest/51e22340-49a1-417f-ac09-93823f4e0ff3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c00e78'},body:JSON.stringify({sessionId:'c00e78',runId:'baseline',hypothesisId:'H4',location:'MissionPin.tsx:isHovered',message:'html-visibility-change',data:{id:mission.id,isHovered,t:Math.round(performance.now())},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [isHovered, mission.id]);
-
   useFrame((state) => {
     if (pulseRef.current && mission.status === 'active' && !prefersReducedMotion) {
       const t = (state.clock.elapsedTime * 0.9) % 1;
@@ -58,19 +57,12 @@ export function MissionPin({ mission }: MissionPinProps) {
     }
   });
 
-  const handleOver = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    // #region agent log
-    fetch('http://127.0.0.1:7403/ingest/51e22340-49a1-417f-ac09-93823f4e0ff3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c00e78'},body:JSON.stringify({sessionId:'c00e78',runId:'baseline',hypothesisId:'H1',location:'MissionPin.tsx:handleOver',message:'pointerOver',data:{id:mission.id,t:Math.round(performance.now())},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+  const handleOver = () => {
     setHoveredMission(mission.id);
     document.body.style.cursor = 'pointer';
   };
 
   const handleOut = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7403/ingest/51e22340-49a1-417f-ac09-93823f4e0ff3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c00e78'},body:JSON.stringify({sessionId:'c00e78',runId:'baseline',hypothesisId:'H2',location:'MissionPin.tsx:handleOut',message:'pointerOut',data:{id:mission.id,t:Math.round(performance.now())},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setHoveredMission(null);
     document.body.style.cursor = 'auto';
   };
@@ -82,18 +74,12 @@ export function MissionPin({ mission }: MissionPinProps) {
 
   return (
     <group position={position} quaternion={quaternion}>
-      {/* Enlarged invisible hit target for pointer + touch */}
-      <mesh
+      <group
+        ref={markerRef}
         onPointerOver={handleOver}
         onPointerOut={handleOut}
         onClick={handleClick}
-        position={[0, 0, 0.05]}
       >
-        <sphereGeometry args={[0.09, 12, 12]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
-
-      <group ref={markerRef}>
         {mission.status === 'impact' ? (
           <mesh position={[0, 0, 0.03]} rotation={[Math.PI / 2, 0, 0]}>
             <octahedronGeometry args={[0.045]} />
@@ -101,6 +87,16 @@ export function MissionPin({ mission }: MissionPinProps) {
               color={color}
               emissive={color}
               emissiveIntensity={emphasized ? 1.4 : 0.7}
+            />
+          </mesh>
+        ) : mission.status === 'planned' ? (
+          <mesh position={[0, 0, 0.03]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.038, 0.008, 8, 24]} />
+            <meshStandardMaterial
+              color={color}
+              emissive={color}
+              emissiveIntensity={emphasized ? 1.2 : 0.55}
+              wireframe
             />
           </mesh>
         ) : (
@@ -129,7 +125,12 @@ export function MissionPin({ mission }: MissionPinProps) {
       </group>
 
       {isHovered && (
-        <Html position={[0, 0, 0.06]} center distanceFactor={6} zIndexRange={[40, 0]}>
+        <Html
+          position={[0, 0, 0.06]}
+          center
+          zIndexRange={[40, 0]}
+          style={{ pointerEvents: 'none' }}
+        >
           <PinHoverCard mission={mission} />
         </Html>
       )}

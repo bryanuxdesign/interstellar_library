@@ -1,7 +1,16 @@
 import type { CelestialBody } from '@/types';
 
-export const MOON_TEXTURE_URL =
-  'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg';
+export const MOON_TEXTURE_URL = '/images/planets/moon.jpg';
+
+export const MARS_TEXTURE_URL = '/images/planets/mars.jpg';
+
+export const VENUS_TEXTURE_URL = '/images/planets/venus.jpg';
+
+/** Left-to-right order on the Gateway home screen. */
+export const GATEWAY_PLANET_ORDER = ['venus', 'moon', 'mars'] as const;
+
+/** Bottom destination cards — Moon first, matching the original layout. */
+export const GATEWAY_CARD_ORDER = ['moon', 'mars', 'venus'] as const;
 
 export const planets: CelestialBody[] = [
   {
@@ -17,7 +26,7 @@ export const planets: CelestialBody[] = [
     name: 'Mars',
     subtitle: 'Sol IV · The Red Planet',
     radiusKm: 3389.5,
-    textureUrl: '',
+    textureUrl: MARS_TEXTURE_URL,
     available: false,
   },
   {
@@ -25,8 +34,8 @@ export const planets: CelestialBody[] = [
     name: 'Venus',
     subtitle: 'Sol II · The Morning Star',
     radiusKm: 6051.8,
-    textureUrl: '',
-    available: false,
+    textureUrl: VENUS_TEXTURE_URL,
+    available: true,
   },
 ];
 

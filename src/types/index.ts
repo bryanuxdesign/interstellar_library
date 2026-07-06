@@ -1,4 +1,4 @@
-export type AssetStatus = 'active' | 'decommissioned' | 'impact';
+export type AssetStatus = 'active' | 'decommissioned' | 'impact' | 'planned';
 
 export interface Coordinates {
   lat: number;
@@ -23,6 +23,12 @@ export interface MissionSource {
   excerpt: string;
 }
 
+export interface MissionImage {
+  url: string;
+  caption: string;
+  credit?: string;
+}
+
 export interface Mission {
   id: string;
   name: string;
@@ -34,12 +40,15 @@ export interface Mission {
   coordinates: Coordinates;
   launchDate: string; // ISO date
   landingDate: string; // ISO date (or impact date)
+  /** Closest approach altitude in km — flyby missions only. */
+  closestApproachKm?: number;
   plannedLifespanDays: number;
   actualLifespanDays: number | null;
   massKg: number;
   healthStatus: string;
   summary: string;
   forensicImageUrl?: string;
+  vehicleImages?: MissionImage[];
   sources: MissionSource[];
 }
 

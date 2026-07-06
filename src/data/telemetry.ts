@@ -10,11 +10,13 @@ export const computeTelemetry = (planetId: string): Telemetry => {
   const missions = getMissionsByPlanet(planetId);
 
   const successfulLandings = missions.filter(
-    (m: Mission) => m.status !== 'impact',
+    (m: Mission) => m.status !== 'impact' && m.status !== 'planned',
   ).length;
   const activeAssets = missions.filter((m) => m.status === 'active').length;
   const impactSites = missions.filter((m) => m.status === 'impact').length;
-  const totalMassKg = missions.reduce((sum, m) => sum + m.massKg, 0);
+  const totalMassKg = missions
+    .filter((m) => m.status !== 'planned')
+    .reduce((sum, m) => sum + m.massKg, 0);
   const agencies = new Set(missions.map((m) => m.agency)).size;
 
   const years = missions.map((m) => getTimelineYear(m.landingDate));
