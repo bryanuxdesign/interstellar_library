@@ -5,6 +5,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { CelestialGlobe, GlobeFallback } from './CelestialGlobe';
 import { CameraController } from './CameraController';
 import { MissionPin } from '@/components/pins/MissionPin';
+import { OrbitalLayer } from '@/components/pins/OrbitalLayer';
+import { PLANET_ROTATION_OFFSET } from './constants';
 
 interface SceneProps {
   missions: Mission[];
@@ -29,13 +31,17 @@ export function Scene({ missions, planetId }: SceneProps) {
       <Stars radius={80} depth={40} count={4000} factor={3} saturation={0} fade speed={0.5} />
 
       <Suspense fallback={<GlobeFallback />}>
-        <CelestialGlobe planetId={planetId} />
+        <CelestialGlobe
+          planetId={planetId}
+          rotationOffset={((PLANET_ROTATION_OFFSET[planetId] ?? 0) * Math.PI) / 180}
+        />
+        <OrbitalLayer planetId={planetId} />
         {visibleMissions.map((mission) => (
           <MissionPin key={mission.id} mission={mission} />
         ))}
       </Suspense>
 
-      <CameraController />
+      <CameraController planetId={planetId} />
     </>
   );
 }

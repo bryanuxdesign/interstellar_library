@@ -122,14 +122,9 @@ export function Gateway() {
 
       {/* Header */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-6 sm:p-10">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="h-2 w-2 rounded-full bg-active shadow-[0_0_10px_#22e06b]" />
-            <span className="eyebrow text-active">Interstellar Archive</span>
-          </div>
-          <p className="mt-2 max-w-xs text-xs leading-relaxed text-ink-soft">
-            Cataloguing humanity&rsquo;s surface footprint across the solar system.
-          </p>
+        <div className="flex items-center gap-3">
+          <span className="h-2 w-2 rounded-full bg-active shadow-[0_0_10px_#22e06b]" />
+          <span className="eyebrow text-active">Interstellar Archive</span>
         </div>
         <div className="pointer-events-auto flex flex-col items-end gap-2">
           <CreatorAboutButton />
@@ -174,17 +169,28 @@ export function Gateway() {
           </div>
 
           {/* Title overlaid on the focused body */}
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-4">
             <motion.h1
-              className="max-w-[min(88vw,680px)] text-center text-5xl font-extrabold leading-[0.95] tracking-tight text-ink drop-shadow-[0_2px_28px_rgba(0,0,0,0.9)] sm:text-7xl md:text-8xl lg:text-[5.5rem]"
+              className="max-w-[min(88vw,680px)] text-center leading-[0.95] tracking-tight drop-shadow-[0_2px_28px_rgba(0,0,0,0.9)]"
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.8 }}
             >
-              THE SURFACE
-              <br />
-              <span className="text-ink-soft">OF EVERYTHING</span>
+              <span className="block text-5xl font-extrabold italic text-ink sm:text-7xl md:text-8xl lg:text-[5.5rem]">
+                Interstellar.
+              </span>
+              <span className="block text-5xl font-extrabold text-ink-soft sm:text-7xl md:text-8xl lg:text-[5.5rem]">
+                Archive.
+              </span>
             </motion.h1>
+            <motion.p
+              className="max-w-md px-4 text-center text-sm font-medium leading-relaxed text-ink drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:max-w-lg sm:text-base"
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.35, duration: 0.7 }}
+            >
+              Cataloguing humanity&rsquo;s surface footprint across the solar system.
+            </motion.p>
           </div>
 
           {/* Telemetry strip overlaid on lower hemisphere */}

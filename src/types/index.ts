@@ -70,3 +70,45 @@ export interface Telemetry {
   firstEventYear: number;
   latestEventYear: number;
 }
+
+/** Keplerian osculating elements referenced to the body's equatorial frame. */
+export interface OrbitalElements {
+  /** Semi-major axis in km (centre-to-centre). */
+  a: number;
+  /** Eccentricity (0 = circular). */
+  e: number;
+  /** Inclination in degrees. */
+  i: number;
+  /** Right ascension of ascending node in degrees. */
+  raan: number;
+  /** Argument of periapsis in degrees. */
+  argPeriapsis: number;
+  /** Mean anomaly at epoch in degrees. */
+  meanAnomalyAtEpoch: number;
+  /** ISO instant the elements were valid. */
+  epoch: string;
+}
+
+export interface OrbitalAsset {
+  id: string;
+  name: string;
+  agency: string;
+  country: string;
+  planetId: string;
+  status: 'active' | 'decommissioned';
+  elements: OrbitalElements;
+  /** Standard gravitational parameter μ (km³/s²) for the central body. */
+  mu: number;
+  summary: string;
+  /** Optional NASA JPL Horizons target ID for future ephemeris upgrades. */
+  horizonsId?: string;
+}
+
+/** Live propagated state for rendering. */
+export interface OrbitalState {
+  positionKm: { x: number; y: number; z: number };
+  lat: number;
+  lng: number;
+  altKm: number;
+  periodMinutes: number;
+}

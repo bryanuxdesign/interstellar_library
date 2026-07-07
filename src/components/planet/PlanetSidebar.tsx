@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { AssetStatus, CelestialBody, Mission } from '@/types';
 import { useAppStore, ALL_STATUSES } from '@/store/useAppStore';
-import { STATUS_COLORS } from '@/three/constants';
+import { STATUS_COLORS, ORBITER_COLOR } from '@/three/constants';
 import { computeTelemetry } from '@/data/telemetry';
+import { getOrbitersByPlanet } from '@/data/orbiters';
 import { formatMass } from '@/utils/format';
 import { countryFlag } from '@/utils/flags';
+import { useLiveOrbiterStates } from '@/utils/useLiveOrbiterStates';
 import { ChronologyToggle } from '@/components/ui/ChronologyToggle';
 import { missionCameraAltitude } from '@/utils/missionCamera';
 
@@ -16,6 +18,8 @@ const STATUS_LABEL: Record<AssetStatus, string> = {
   impact: 'Impacts',
   planned: 'Planned',
 };
+
+type SidebarSection = 'orbiters' | 'missions';
 
 interface PlanetSidebarProps {
   planet: CelestialBody;
@@ -33,6 +37,24 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const flyTo = useAppStore((s) => s.flyTo);
   const chronologyReversed = useAppStore((s) => s.chronologyReversed);
+  const showOrbiters = useAppStore((s) => s.showOrbiters);
+  const toggleShowOrbiters = useAppStore((s) => s.toggleShowOrbiters);
+  const selectedOrbiterId = useAppStore((s) => s.selectedOrbiterId);
+  const setHoveredOrbiter = useAppStore((s) => s.setHoveredOrbiter);
+  const selectOrbiter = useAppStore((s) => s.selectOrbiter);
+
+  const orbiters = useMemo(() => getOrbitersByPlanet(planet.id), [planet.id]);
+  const orbiterStates = useLiveOrbiterStates(orbiters);
+  const hasOrbiters = orbiters.length > 0;
+
+  const [expandedSection, setExpandedSection] = useState<SidebarSection>('missions');
+
+  const expandSection = (section: SidebarSection) => {
+    setExpandedSection(section);
+  };
+
+  const orbitersExpanded = hasOrbiters && expandedSection === 'orbiters';
+  const missionsExpanded = !hasOrbiters || expandedSection === 'missions';
 
   const telemetry = useMemo(() => computeTelemetry(planet.id), [planet.id]);
 
@@ -50,6 +72,16 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
   const handleSelect = (mission: Mission) => {
     selectMission(mission.id);
     flyTo(mission.coordinates, missionCameraAltitude(mission));
+    setOpen(false);
+  };
+
+  const handleSelectOrbiter = (orbiterId: string) => {
+    const state = orbiterStates.get(orbiterId);
+    const orbiter = orbiters.find((o) => o.id === orbiterId);
+    if (!state || !orbiter) return;
+    selectOrbiter(orbiterId);
+    const altMultiplier = Math.max(2.4, (state.altKm / planet.radiusKm) * 1.2 + 1.5);
+    flyTo({ lat: state.lat, lng: state.lng }, altMultiplier);
     setOpen(false);
   };
 
@@ -117,52 +149,160 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
           })}
         </div>
 
-        {/* Mission registry */}
-        <div className="flex items-center justify-between border-b border-sharp px-4 py-2">
-          <span className="eyebrow">Mission Registry</span>
-          <ChronologyToggle compact />
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
-          {visibleMissions.map((mission) => {
-            const color = STATUS_COLORS[mission.status];
-            const selected = selectedMissionId === mission.id;
-            return (
-              <button
-                key={mission.id}
-                type="button"
-                onClick={() => handleSelect(mission)}
-                onMouseEnter={() => setHoveredMission(mission.id)}
-                onMouseLeave={() => setHoveredMission(null)}
-                className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
-                  selected ? 'bg-raised' : 'hover:bg-white/5'
-                }`}
-              >
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-ink">
-                    {mission.name}
-                  </span>
-                  <span className="block truncate text-[10px] text-ink-faint">
-                    {countryFlag(mission.country)} {mission.country} · {mission.classification}
-                  </span>
-                </span>
-                <span className="tabular text-[10px] text-ink-faint">
-                  {mission.landingDate.slice(0, 4)}
-                </span>
-              </button>
-            );
-          })}
-          {visibleMissions.length === 0 && (
-            <p className="px-3 py-6 text-center text-xs text-ink-faint">
-              No hardware matches the active filters.
-            </p>
+        {/* Collapsible registry sections */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {hasOrbiters && (
+            <section
+              className={`flex flex-col border-b border-sharp ${
+                orbitersExpanded ? 'min-h-0 flex-1' : 'shrink-0'
+              }`}
+            >
+              <div className="flex shrink-0 items-center justify-between px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => expandSection('orbiters')}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
+                >
+                  <Chevron open={orbitersExpanded} />
+                  <span className="eyebrow">In Orbit</span>
+                  <span className="font-mono text-[9px] text-ink-faint">{orbiters.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleShowOrbiters}
+                  className="ml-2 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-medium transition"
+                  style={{
+                    borderColor: showOrbiters ? `${ORBITER_COLOR}66` : 'rgba(255,255,255,0.1)',
+                    color: showOrbiters ? ORBITER_COLOR : '#6b7280',
+                    backgroundColor: showOrbiters ? `${ORBITER_COLOR}14` : 'transparent',
+                  }}
+                >
+                  {showOrbiters ? 'Live' : 'Hidden'}
+                </button>
+              </div>
+              {orbitersExpanded && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
+                  {orbiters.map((orbiter) => {
+                    const state = orbiterStates.get(orbiter.id);
+                    const selected = selectedOrbiterId === orbiter.id;
+                    return (
+                      <button
+                        key={orbiter.id}
+                        type="button"
+                        onClick={() => handleSelectOrbiter(orbiter.id)}
+                        onMouseEnter={() => setHoveredOrbiter(orbiter.id)}
+                        onMouseLeave={() => setHoveredOrbiter(null)}
+                        className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
+                          selected ? 'bg-raised' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: ORBITER_COLOR }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] text-ink">
+                            {orbiter.name}
+                          </span>
+                          <span className="block truncate text-[10px] text-ink-faint">
+                            {countryFlag(orbiter.country)} {orbiter.agency}
+                          </span>
+                        </span>
+                        {state && (
+                          <span className="tabular text-right text-[9px] leading-tight text-ink-faint">
+                            {Math.round(state.altKm)} km
+                            <br />
+                            {state.periodMinutes.toFixed(0)} min
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  <p className="px-3 py-2 text-[9px] leading-relaxed text-ink-faint">
+                    Positions computed from published orbital elements — approximate.
+                  </p>
+                </div>
+              )}
+            </section>
           )}
+
+          <section
+            className={`flex flex-col ${
+              missionsExpanded ? 'min-h-0 flex-1' : 'shrink-0 border-t border-sharp'
+            }`}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-sharp px-4 py-2">
+              <button
+                type="button"
+                onClick={() => expandSection('missions')}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
+              >
+                <Chevron open={missionsExpanded} />
+                <span className="eyebrow">Mission Registry</span>
+                <span className="font-mono text-[9px] text-ink-faint">{visibleMissions.length}</span>
+              </button>
+              {missionsExpanded && <ChronologyToggle compact />}
+            </div>
+            {missionsExpanded && (
+              <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
+                {visibleMissions.map((mission) => {
+                  const color = STATUS_COLORS[mission.status];
+                  const selected = selectedMissionId === mission.id;
+                  return (
+                    <button
+                      key={mission.id}
+                      type="button"
+                      onClick={() => handleSelect(mission)}
+                      onMouseEnter={() => setHoveredMission(mission.id)}
+                      onMouseLeave={() => setHoveredMission(null)}
+                      className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
+                        selected ? 'bg-raised' : 'hover:bg-white/5'
+                      }`}
+                    >
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] text-ink">
+                          {mission.name}
+                        </span>
+                        <span className="block truncate text-[10px] text-ink-faint">
+                          {countryFlag(mission.country)} {mission.country} · {mission.classification}
+                        </span>
+                      </span>
+                      <span className="tabular text-[10px] text-ink-faint">
+                        {mission.landingDate.slice(0, 4)}
+                      </span>
+                    </button>
+                  );
+                })}
+                {visibleMissions.length === 0 && (
+                  <p className="px-3 py-6 text-center text-xs text-ink-faint">
+                    No hardware matches the active filters.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
         </div>
       </motion.aside>
     </>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      className={`shrink-0 text-ink-faint transition-transform ${open ? 'rotate-90' : ''}`}
+      aria-hidden
+    >
+      <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
   );
 }
 

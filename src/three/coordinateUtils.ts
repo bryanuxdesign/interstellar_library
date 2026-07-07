@@ -1,7 +1,9 @@
 import { Vector3 } from 'three';
 import type { Coordinates, Mission } from '@/types';
+import { GLOBE_RADIUS } from './constants';
 
 const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
 
 /**
  * The Celestial Mapping Engine.
@@ -23,6 +25,38 @@ export function latLngToVector3(
   const z = radius * Math.sin(phi) * Math.sin(theta);
 
   return target.set(x, y, z);
+}
+
+/**
+ * Inverse of latLngToVector3 for a position on or above the reference sphere.
+ * Input is body-centred Cartesian km; output lat/lng matches the mapping engine.
+ */
+export function cartesianToLatLng(
+  { x, y, z }: { x: number; y: number; z: number },
+  planetRadiusKm: number,
+  rotationOffsetDeg = 0,
+): Coordinates & { altKm: number } {
+  const r = Math.sqrt(x * x + y * y + z * z);
+  const phi = Math.acos(Math.max(-1, Math.min(1, y / r)));
+  const lat = 90 - phi * RAD2DEG;
+  const theta = Math.atan2(z, -x);
+  let lng = theta * RAD2DEG - 180 - rotationOffsetDeg;
+  lng = ((lng + 180) % 360) - 180;
+  const altKm = Math.max(0, r - planetRadiusKm);
+  return { lat, lng, altKm };
+}
+
+/** Convert body-centred km position to scene units at the correct altitude. */
+export function positionKmToSceneVector3(
+  { x, y, z }: { x: number; y: number; z: number },
+  planetRadiusKm: number,
+  rotationOffsetDeg = 0,
+  target = new Vector3(),
+): Vector3 {
+  const rKm = Math.sqrt(x * x + y * y + z * z);
+  const { lat, lng } = cartesianToLatLng({ x, y, z }, planetRadiusKm, rotationOffsetDeg);
+  const sceneRadius = GLOBE_RADIUS * (rKm / planetRadiusKm);
+  return latLngToVector3({ lat, lng }, sceneRadius, target);
 }
 
 /**

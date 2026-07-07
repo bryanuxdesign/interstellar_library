@@ -51,9 +51,9 @@ export function CreatorAboutButton() {
         aria-label="About the creator"
         title="About the creator"
       >
-        <CreatorIcon />
-        <span className="hidden font-mono text-[10px] uppercase tracking-widest sm:inline">
-          Creator
+        <AboutCreatorIcon />
+        <span className="text-[11px] font-medium text-ink sm:text-xs">
+          About the creator
         </span>
       </button>
       <CreatorAboutModal open={open} onClose={() => setOpen(false)} />
@@ -163,11 +163,12 @@ function CreatorAboutModal({ open, onClose }: CreatorAboutProps) {
   );
 }
 
-function CreatorIcon() {
+function AboutCreatorIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
-      <circle cx="8" cy="5.5" r="2.5" />
-      <path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round" />
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 7.25v4" strokeLinecap="round" />
+      <circle cx="8" cy="5" r="0.75" fill="currentColor" stroke="none" />
     </svg>
   );
 }

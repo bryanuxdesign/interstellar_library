@@ -5,6 +5,7 @@ const FLAGS: Record<string, string> = {
   Russia: '🇷🇺',
   China: '🇨🇳',
   India: '🇮🇳',
+  'South Korea': '🇰🇷',
   Japan: '🇯🇵',
   Israel: '🇮🇱',
 };

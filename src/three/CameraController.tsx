@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Vector3 } from 'three';
@@ -6,15 +6,25 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useAppStore } from '@/store/useAppStore';
 import { latLngToVector3 } from './coordinateUtils';
 import { DEFAULT_CAMERA_DISTANCE, GLOBE_RADIUS } from './constants';
+import { maxCameraDistanceForPlanet } from './orbitPropagation';
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function CameraController() {
+interface CameraControllerProps {
+  planetId: string;
+}
+
+export function CameraController({ planetId }: CameraControllerProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const { camera, gl } = useThree();
   const cameraTarget = useAppStore((s) => s.cameraTarget);
+
+  const maxDistance = useMemo(
+    () => Math.max(DEFAULT_CAMERA_DISTANCE + 2, maxCameraDistanceForPlanet(planetId)),
+    [planetId],
+  );
 
   const desired = useRef<Vector3 | null>(null);
   const userControlling = useRef(false);
@@ -56,7 +66,7 @@ export function CameraController() {
       rotateSpeed={0.45}
       zoomSpeed={0.7}
       minDistance={GLOBE_RADIUS + 0.35}
-      maxDistance={DEFAULT_CAMERA_DISTANCE + 2}
+      maxDistance={maxDistance}
       onStart={() => {
         userControlling.current = true;
         desired.current = null;

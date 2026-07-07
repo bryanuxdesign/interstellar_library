@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
 import { getPlanet } from '@/data/planets';
 import { getMissionsByPlanet } from '@/data/missions';
+import { getOrbitersByPlanet } from '@/data/orbiters';
 import { useAppStore } from '@/store/useAppStore';
 import { DEFAULT_CAMERA_DISTANCE } from '@/three/constants';
 import { computeNearSideCluster } from '@/three/coordinateUtils';
@@ -18,6 +19,7 @@ export function PlanetView() {
 
   const planet = getPlanet(planetId);
   const missions = getMissionsByPlanet(planetId);
+  const orbiterCount = getOrbitersByPlanet(planetId).length;
 
   const setActivePlanet = useAppStore((s) => s.setActivePlanet);
   const closeDossier = useAppStore((s) => s.closeDossier);
@@ -63,7 +65,7 @@ export function PlanetView() {
       <div className="pointer-events-none absolute right-5 top-5 z-10 hidden text-right md:block">
         <span className="eyebrow text-active">Live Feed</span>
         <p className="tabular mt-1 text-[11px] text-ink-faint">
-          {missions.length} catalogued touchpoints
+          {missions.length} surface · {orbiterCount} in orbit
         </p>
       </div>
 
