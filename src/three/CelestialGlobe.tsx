@@ -7,6 +7,7 @@ import { GLOBE_RADIUS } from './constants';
 const PLANET_MODELS: Record<string, string> = {
   moon: '/models/moon.glb',
   venus: '/models/venus.glb',
+  mars: '/models/mars.glb',
 };
 
 const DEFAULT_MODEL = PLANET_MODELS.moon;
@@ -75,3 +76,4 @@ export function GlobeFallback({ radius = GLOBE_RADIUS }: { radius?: number }) {
 
 useGLTF.preload(PLANET_MODELS.moon);
 useGLTF.preload(PLANET_MODELS.venus);
+useGLTF.preload(PLANET_MODELS.mars);

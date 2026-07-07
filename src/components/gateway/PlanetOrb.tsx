@@ -1,8 +1,11 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
 import type { CelestialBody } from '@/types';
-import { CelestialGlobe, GlobeFallback } from '@/three/CelestialGlobe';
+import { CelestialGlobe } from '@/three/CelestialGlobe';
+import { markGlobeLoaded } from '@/components/gateway/globeLoadedCache';
+
+export type HeroSlot = 'left' | 'center' | 'right';
 
 interface PlanetOrbProps {
   planet: CelestialBody;
@@ -10,13 +13,21 @@ interface PlanetOrbProps {
   onSelect: () => void;
   /** Cinematic hero cluster — larger center body, flanking worlds, no card chrome */
   hero?: boolean;
+  /** Carousel slot (hero mode only) — keeps the focused body centered. */
+  slot?: HeroSlot;
+  /** When set, the centered orb may hide its static image (live globe has painted). */
+  paintedId?: string | null;
+  /** Outgoing center body during a swap — static reveals instantly on the orb for exit motion. */
+  departingCenterId?: string | null;
+  /** Whether the carousel is idle (not mid-swap). */
+  carouselIdle?: boolean;
+  /** Fires when this orb finishes its carousel motion while centered. */
+  onCarouselSettled?: (planetId: string, swapEpoch: number) => void;
+  /** Bumped on each carousel swap — ignores stale animation-complete callbacks. */
+  swapEpoch?: number;
 }
 
-const PLANET_GLOW: Record<string, string> = {
-  moon: 'rgba(34, 224, 107, 0.35)',
-  mars: 'rgba(255, 69, 58, 0.28)',
-  venus: 'rgba(255, 196, 92, 0.32)',
-};
+const HERO_GLOBE_IDS = ['moon', 'venus', 'mars'] as const;
 
 const PLANET_IMAGES: Record<string, string> = {
   moon: '/images/planets/moon.jpg',
@@ -24,23 +35,153 @@ const PLANET_IMAGES: Record<string, string> = {
   venus: '/images/planets/venus.jpg',
 };
 
-const GLOBE_3D_PLANETS = new Set(['moon', 'venus']);
+const GLOBE_3D_PLANETS = new Set(['moon', 'venus', 'mars']);
 
-export function PlanetOrb({ planet, focused, onSelect, hero = false }: PlanetOrbProps) {
-  const glow = PLANET_GLOW[planet.id] ?? 'rgba(255,255,255,0.2)';
-  const [globeCanvasReady, setGlobeCanvasReady] = useState(false);
+/** Fixed orb footprint; only transform (x/scale) animates so the width never reflows. */
+export const HERO_ORB_SIZE = 'min(72vmin, 720px)';
+export const HERO_CAROUSEL_DURATION_S = 1.05;
+export const HERO_GLOBE_FADE_IN_S = 0.5;
+export const HERO_GLOBE_FADE_OUT_S = 0.28;
+
+export const HERO_CAROUSEL_TRANSITION = {
+  type: 'tween' as const,
+  duration: HERO_CAROUSEL_DURATION_S,
+  ease: [0.45, 0.05, 0.25, 1] as const,
+};
+
+const HERO_SLOT_MOTION: Record<
+  HeroSlot,
+  { x: string; scale: number; opacity: number; zIndex: number }
+> = {
+  center: { x: '-50%', scale: 1, opacity: 1, zIndex: 3 },
+  left: { x: 'calc(-50% - 42vw)', scale: 0.26, opacity: 0.85, zIndex: 1 },
+  right: { x: 'calc(-50% + 42vw)', scale: 0.26, opacity: 0.85, zIndex: 1 },
+};
+
+function GlobeLoadedMarker({
+  planetId,
+  onPainted,
+}: {
+  planetId: string;
+  onPainted: (planetId: string) => void;
+}) {
+  useEffect(() => {
+    markGlobeLoaded(planetId);
+    onPainted(planetId);
+  }, [planetId, onPainted]);
+  return null;
+}
+
+function HeroGlobeScene({
+  focusedId,
+  onPainted,
+}: {
+  focusedId: string;
+  onPainted: (planetId: string) => void;
+}) {
+  return (
+    <>
+      {HERO_GLOBE_IDS.map((id) => (
+        <group key={id} visible={focusedId === id}>
+          <CelestialGlobe
+            planetId={id}
+            autoRotate={focusedId === id}
+            rotationSpeed={0.08}
+            radius={2}
+          />
+          {focusedId === id && (
+            <GlobeLoadedMarker planetId={id} onPainted={onPainted} />
+          )}
+        </group>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One persistent WebGL context for the focused planet's live globe.
+ * All three models stay mounted; switching only toggles visibility so there
+ * is no remount/Suspense delay between carousel swaps.
+ */
+export function HeroCenterGlobeLayer({
+  displayGlobeId,
+  visible,
+  onPainted,
+}: {
+  /** Planet model shown in the fixed center overlay — only changes after carousel settles. */
+  displayGlobeId: string;
+  /** Fades the live globe in only after the carousel motion settles. */
+  visible: boolean;
+  onPainted?: (planetId: string) => void;
+}) {
+  const handlePainted = useCallback(
+    (planetId: string) => onPainted?.(planetId),
+    [onPainted],
+  );
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full"
+      style={{ width: HERO_ORB_SIZE, height: HERO_ORB_SIZE }}
+      animate={{ opacity: visible ? 1 : 0 }}
+      transition={{
+        duration: visible ? HERO_GLOBE_FADE_IN_S : HERO_GLOBE_FADE_OUT_S,
+        ease: 'easeInOut',
+      }}
+    >
+      <Canvas
+        camera={{ position: [0, 0, 5.2], fov: 38 }}
+        dpr={[1, 1.5]}
+        frameloop="always"
+        gl={{ alpha: true, antialias: true }}
+        resize={{ debounce: 0, scroll: false }}
+        style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }}
+      >
+        <ambientLight intensity={0.35} />
+        <directionalLight position={[4, 2, 5]} intensity={2.2} color="#fff6ec" />
+        <Suspense fallback={null}>
+          <HeroGlobeScene focusedId={displayGlobeId} onPainted={handlePainted} />
+        </Suspense>
+      </Canvas>
+    </motion.div>
+  );
+}
+
+export function PlanetOrb({
+  planet,
+  focused,
+  onSelect,
+  hero = false,
+  slot = 'center',
+  paintedId = null,
+  departingCenterId = null,
+  carouselIdle = true,
+  onCarouselSettled,
+  swapEpoch = 0,
+}: PlanetOrbProps) {
   const has3dGlobe = GLOBE_3D_PLANETS.has(planet.id);
+  const heroMotion = HERO_SLOT_MOTION[slot];
+  const isDeparting = !carouselIdle && departingCenterId === planet.id;
+  const hideStaticForGlobe =
+    hero && has3dGlobe && focused && paintedId === planet.id;
 
   return (
     <motion.button
       type="button"
-      layout
       onClick={onSelect}
       aria-pressed={focused}
-      aria-label={`${planet.name}${focused ? ' — selected' : ''}`}
+      aria-label={
+        focused
+          ? planet.available
+            ? `${planet.name} — click to explore`
+            : `${planet.name} — coming soon`
+          : `${planet.name} — click to focus`
+      }
       className={
         hero
-          ? 'group flex min-w-0 flex-col items-center justify-center bg-transparent p-0 text-center'
+          ? `group absolute left-1/2 top-1/2 flex min-w-0 flex-col items-center justify-center bg-transparent p-0 text-center ${
+              focused && !planet.available ? 'cursor-default' : 'cursor-pointer'
+            }`
           : `group flex min-w-0 flex-col items-center gap-2 rounded-xl border bg-transparent p-2 text-center transition-colors sm:gap-3 sm:p-3 ${
               focused
                 ? 'border-active/30 bg-panel/40'
@@ -50,12 +191,11 @@ export function PlanetOrb({ planet, focused, onSelect, hero = false }: PlanetOrb
       animate={
         hero
           ? {
-              flexGrow: focused ? 4 : 0.45,
-              flexShrink: focused ? 0 : 1,
-              flexBasis: focused ? '64%' : '11%',
-              opacity: focused ? 1 : 0.55,
-              scale: focused ? 1 : 0.62,
-              y: focused ? 0 : 12,
+              x: heroMotion.x,
+              y: '-50%',
+              scale: heroMotion.scale,
+              opacity: heroMotion.opacity,
+              zIndex: heroMotion.zIndex,
             }
           : {
               flexGrow: focused ? 1.55 : 0.65,
@@ -65,46 +205,30 @@ export function PlanetOrb({ planet, focused, onSelect, hero = false }: PlanetOrb
               scale: focused ? 1 : 0.82,
             }
       }
-      transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+      transition={
+        hero
+          ? HERO_CAROUSEL_TRANSITION
+          : { type: 'spring', stiffness: 280, damping: 28 }
+      }
       style={{
-        maxWidth: hero
-          ? focused
-            ? 'min(72vmin, 760px)'
-            : 'min(17vmin, 168px)'
-          : focused
-            ? 420
-            : 148,
+        width: hero ? HERO_ORB_SIZE : undefined,
+        maxWidth: hero ? HERO_ORB_SIZE : focused ? 420 : 148,
+        willChange: hero ? 'transform' : undefined,
       }}
       onAnimationComplete={() => {
-        if (has3dGlobe) {
-          window.dispatchEvent(new Event('resize'));
-        }
+        if (hero && focused) onCarouselSettled?.(planet.id, swapEpoch);
       }}
     >
-      <div
-        className={`relative aspect-square w-full ${
-          hero ? 'max-w-[min(100%,72vmin)]' : 'max-w-[min(100%,420px)]'
-        }`}
-        style={{
-          filter: focused ? `drop-shadow(0 0 28px ${glow})` : 'none',
-        }}
-      >
-        {has3dGlobe && (
-          <GlobeOrbCanvas
-            planetId={planet.id}
-            visible={focused}
-            onReadyChange={setGlobeCanvasReady}
-          />
-        )}
-
+      <div className="relative aspect-square w-full">
         <PlanetSphere
           planet={planet}
           dimmed={!focused}
-          hidden={has3dGlobe && focused && globeCanvasReady}
+          hidden={hideStaticForGlobe}
+          instantReveal={isDeparting}
         />
 
-        {!planet.available && (
-          <span className="absolute bottom-[8%] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-sharp bg-deep/80 px-2 py-0.5 font-mono text-[8px] uppercase tracking-widest text-ink-soft sm:text-[9px]">
+        {!planet.available && focused && (
+          <span className="absolute left-1/2 top-[5%] z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-sharp bg-deep/80 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft sm:text-xs">
             Coming soon
           </span>
         )}
@@ -128,90 +252,17 @@ export function PlanetOrb({ planet, focused, onSelect, hero = false }: PlanetOrb
   );
 }
 
-/** Keeps the WebGL context alive so refocusing does not clip to a partial slice. */
-function GlobeOrbCanvas({
-  planetId,
-  visible,
-  onReadyChange,
-}: {
-  planetId: string;
-  visible: boolean;
-  onReadyChange: (ready: boolean) => void;
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [canvasReady, setCanvasReady] = useState(false);
-
-  useEffect(() => {
-    if (!wrapRef.current) return;
-
-    const update = () => {
-      const rect = wrapRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const square =
-        Math.abs(rect.width - rect.height) < 6 && rect.width >= 100;
-      setCanvasReady(square);
-      onReadyChange(square);
-      if (square) window.dispatchEvent(new Event('resize'));
-    };
-
-    const ro = new ResizeObserver(update);
-    ro.observe(wrapRef.current);
-    update();
-    return () => ro.disconnect();
-  }, [onReadyChange]);
-
-  useEffect(() => {
-    if (!visible) {
-      setCanvasReady(false);
-      onReadyChange(false);
-    }
-  }, [visible, onReadyChange]);
-
-  const showCanvas = visible && canvasReady;
-
-  return (
-    <div
-      ref={wrapRef}
-      className="absolute inset-0 overflow-hidden rounded-full border border-strong bg-deep"
-      style={{
-        visibility: visible ? 'visible' : 'hidden',
-        opacity: showCanvas ? 1 : 0,
-        pointerEvents: showCanvas ? 'auto' : 'none',
-        zIndex: showCanvas ? 2 : 0,
-        transition: 'opacity 0.2s ease',
-      }}
-      aria-hidden={!showCanvas}
-    >
-      <Canvas
-        camera={{ position: [0, 0, 5.2], fov: 38 }}
-        dpr={[1, 1.5]}
-        frameloop={showCanvas ? 'always' : 'never'}
-        resize={{ debounce: 0, scroll: false }}
-        style={{ width: '100%', height: '100%', display: 'block' }}
-      >
-        <ambientLight intensity={0.35} />
-        <directionalLight position={[4, 2, 5]} intensity={2.2} color="#fff6ec" />
-        <Suspense fallback={<GlobeFallback radius={2} />}>
-          <CelestialGlobe
-            planetId={planetId}
-            autoRotate
-            rotationSpeed={0.04}
-            radius={2}
-          />
-        </Suspense>
-      </Canvas>
-    </div>
-  );
-}
-
 function PlanetSphere({
   planet,
   dimmed,
   hidden,
+  instantReveal = false,
 }: {
   planet: CelestialBody;
   dimmed: boolean;
   hidden?: boolean;
+  /** Skip opacity fade-in when handing off from live globe to static exit motion. */
+  instantReveal?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const src = PLANET_IMAGES[planet.id];
@@ -224,10 +275,11 @@ function PlanetSphere({
 
   return (
     <div
-      className="absolute inset-0 overflow-hidden rounded-full border border-strong"
+      className="absolute inset-0 overflow-hidden rounded-full"
       style={{
         opacity: hidden ? 0 : dimmed ? 0.82 : 1,
         pointerEvents: hidden ? 'none' : 'auto',
+        transition: instantReveal ? 'none' : 'opacity 0.5s ease-in-out',
         boxShadow: dimmed
           ? 'inset -8px -8px 24px rgba(0,0,0,0.55)'
           : 'inset -12px -12px 32px rgba(0,0,0,0.45)',

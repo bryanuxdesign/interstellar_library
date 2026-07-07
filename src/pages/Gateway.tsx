@@ -1,22 +1,36 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stars } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
-import {
-  GATEWAY_CARD_ORDER,
-  GATEWAY_PLANET_ORDER,
-  getPlanet,
-} from '@/data/planets';
+import { GATEWAY_PLANET_ORDER, getPlanet } from '@/data/planets';
 import { computeTelemetry } from '@/data/telemetry';
-import { PlanetOrb } from '@/components/gateway/PlanetOrb';
+import { HeroCenterGlobeLayer, PlanetOrb, HERO_ORB_SIZE, type HeroSlot } from '@/components/gateway/PlanetOrb';
+import { isGlobeLoaded } from '@/components/gateway/globeLoadedCache';
 import { TelemetryCounter } from '@/components/gateway/TelemetryCounter';
 import { CreatorAboutButton } from '@/components/ui/CreatorAbout';
 
+const SLOT_ORDER: HeroSlot[] = ['left', 'center', 'right'];
+
+/** Initial arrangement — Moon centered, flanked by Venus (left) and Mars (right). */
+function initialSlots(): Record<string, HeroSlot> {
+  const map: Record<string, HeroSlot> = {};
+  GATEWAY_PLANET_ORDER.forEach((id, index) => {
+    map[id] = SLOT_ORDER[index] ?? 'center';
+  });
+  return map;
+}
+
 export function Gateway() {
   const navigate = useNavigate();
-  const [focusedId, setFocusedId] = useState<string>('moon');
+  const [slots, setSlots] = useState<Record<string, HeroSlot>>(initialSlots);
   const [departingId, setDepartingId] = useState<string | null>(null);
+  const [paintedId, setPaintedId] = useState<string | null>(null);
+  const [displayGlobeId, setDisplayGlobeId] = useState('moon');
+  const [departingCenterId, setDepartingCenterId] = useState<string | null>(null);
+  const [carouselIdle, setCarouselIdle] = useState(true);
+  const [swapEpoch, setSwapEpoch] = useState(0);
+  const swapEpochRef = useRef(0);
 
   const heroPlanets = useMemo(
     () =>
@@ -26,12 +40,33 @@ export function Gateway() {
     [],
   );
 
-  const cardPlanets = useMemo(
-    () =>
-      GATEWAY_CARD_ORDER.map((id) => getPlanet(id)).filter(
-        (p): p is NonNullable<typeof p> => p !== undefined,
-      ),
-    [],
+  const focusedId = useMemo(
+    () => Object.keys(slots).find((id) => slots[id] === 'center') ?? 'moon',
+    [slots],
+  );
+
+  const globeVisible = carouselIdle && paintedId === displayGlobeId;
+
+  const handlePainted = useCallback(
+    (planetId: string) => {
+      if (carouselIdle && planetId === displayGlobeId) {
+        setPaintedId(planetId);
+      }
+    },
+    [carouselIdle, displayGlobeId],
+  );
+
+  const handleCarouselSettled = useCallback(
+    (planetId: string, epoch: number) => {
+      if (epoch !== swapEpochRef.current) return;
+      const centerId = Object.keys(slots).find((id) => slots[id] === 'center');
+      if (centerId !== planetId) return;
+      setDisplayGlobeId(planetId);
+      setDepartingCenterId(null);
+      setCarouselIdle(true);
+      if (isGlobeLoaded(planetId)) setPaintedId(planetId);
+    },
+    [slots],
   );
 
   const telemetry = useMemo(() => computeTelemetry(focusedId), [focusedId]);
@@ -44,12 +79,30 @@ export function Gateway() {
   };
 
   const handlePlanetSelect = (planetId: string) => {
-    if (focusedId === planetId) {
+    // Clicking the centered planet opens its archive ("know more").
+    if (slots[planetId] === 'center') {
       launch(planetId);
       return;
     }
-    setFocusedId(planetId);
+    // Clicking a flanking planet swaps it into the center; the outgoing
+    // centered planet takes the slot the clicked planet just vacated.
+    const nextEpoch = swapEpochRef.current + 1;
+    swapEpochRef.current = nextEpoch;
+    setSwapEpoch(nextEpoch);
+    setDepartingCenterId(focusedId);
+    setCarouselIdle(false);
+    setPaintedId(null);
+    setSlots((prev) => {
+      const targetSlot = prev[planetId];
+      const centerId = Object.keys(prev).find((id) => prev[id] === 'center');
+      if (!centerId) return prev;
+      return { ...prev, [planetId]: 'center', [centerId]: targetSlot };
+    });
   };
+
+  const focusedPlanet = getPlanet(focusedId);
+  const canExploreFocused =
+    carouselIdle && focusedPlanet?.available === true;
 
   return (
     <motion.div
@@ -84,24 +137,44 @@ export function Gateway() {
         </div>
       </header>
 
-      {/* Hero: Venus · Moon · Mars with title + telemetry overlaid */}
+      {/* Hero: focused world centered, others flanking it */}
       <div className="absolute inset-x-0 top-1/2 z-10 -translate-y-[46%] px-2 sm:px-4">
         <div className="relative mx-auto w-full max-w-[min(98vw,1320px)]">
-          {/* Planet cluster — flanking worlds at the sides of the moon */}
+          {/* Planet carousel — absolute slots keep the focused body dead-center */}
           <div className="relative flex h-[min(76vh,820px)] min-h-[min(68vw,420px)] items-center justify-center">
             {heroPlanets.map((planet) => (
               <PlanetOrb
                 key={planet.id}
                 planet={planet}
-                focused={focusedId === planet.id}
+                slot={slots[planet.id]}
+                focused={slots[planet.id] === 'center'}
                 onSelect={() => handlePlanetSelect(planet.id)}
+                paintedId={paintedId}
+                departingCenterId={departingCenterId}
+                carouselIdle={carouselIdle}
+                swapEpoch={swapEpoch}
+                onCarouselSettled={handleCarouselSettled}
                 hero
               />
             ))}
+            <HeroCenterGlobeLayer
+              displayGlobeId={displayGlobeId}
+              visible={globeVisible}
+              onPainted={handlePainted}
+            />
+            {canExploreFocused && (
+              <button
+                type="button"
+                className="absolute left-1/2 top-1/2 z-[16] -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                style={{ width: HERO_ORB_SIZE, height: HERO_ORB_SIZE }}
+                aria-label={`${focusedPlanet.name} — click to explore`}
+                onClick={() => launch(focusedId)}
+              />
+            )}
           </div>
 
           {/* Title overlaid on the focused body */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <motion.h1
               className="max-w-[min(88vw,680px)] text-center text-5xl font-extrabold leading-[0.95] tracking-tight text-ink drop-shadow-[0_2px_28px_rgba(0,0,0,0.9)] sm:text-7xl md:text-8xl lg:text-[5.5rem]"
               initial={{ y: 24, opacity: 0 }}
@@ -116,7 +189,7 @@ export function Gateway() {
 
           {/* Telemetry strip overlaid on lower hemisphere */}
           <motion.div
-            className="pointer-events-none absolute inset-x-0 bottom-[4%] flex justify-center sm:bottom-[6%]"
+            className="pointer-events-none absolute inset-x-0 bottom-[4%] z-20 flex justify-center sm:bottom-[6%]"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: departingId ? 0 : 1 }}
             transition={{ delay: 0.35, duration: 0.7 }}
@@ -137,57 +210,6 @@ export function Gateway() {
               />
             </div>
           </motion.div>
-        </div>
-      </div>
-
-      {/* Destination selector */}
-      <div className="absolute inset-x-0 bottom-0 z-10 p-6 sm:p-8">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-stretch">
-          {cardPlanets.map((planet) => {
-            const focused = focusedId === planet.id;
-            return (
-              <button
-                key={planet.id}
-                type="button"
-                onClick={() => handlePlanetSelect(planet.id)}
-                className={`group flex-1 rounded-lg border px-4 py-3 text-left backdrop-blur transition ${
-                  focused
-                    ? planet.available
-                      ? 'border-active bg-panel hover:bg-raised'
-                      : 'border-active/40 bg-panel/80'
-                    : planet.available
-                      ? 'border-strong bg-panel hover:border-active hover:bg-raised'
-                      : 'border-sharp bg-panel/70 hover:border-strong'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-sm font-semibold ${
-                      planet.available || focused ? 'text-ink' : 'text-ink-soft'
-                    }`}
-                  >
-                    {planet.name}
-                  </span>
-                  <span
-                    className={`eyebrow ${
-                      planet.available && focused
-                        ? 'text-active'
-                        : planet.available
-                          ? 'text-ink-soft group-hover:text-active'
-                          : 'text-ink-soft'
-                    }`}
-                  >
-                    {planet.available ? (focused ? 'ENTER →' : 'SELECT') : 'SOON'}
-                  </span>
-                </div>
-                <span className="mt-1 block text-[11px] text-ink-soft">
-                  {planet.available
-                    ? planet.subtitle
-                    : `${planet.subtitle} · Coming soon`}
-                </span>
-              </button>
-            );
-          })}
         </div>
       </div>
     </motion.div>
