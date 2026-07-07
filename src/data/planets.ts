@@ -27,7 +27,7 @@ export const planets: CelestialBody[] = [
     subtitle: 'Sol IV · The Red Planet',
     radiusKm: 3389.5,
     textureUrl: MARS_TEXTURE_URL,
-    available: false,
+    available: true,
   },
   {
     id: 'venus',

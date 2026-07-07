@@ -3,21 +3,10 @@ import { getMissionsByPlanet } from './missions';
 import { getTimelineYear } from './timeline';
 
 /**
- * Static footprint figures for bodies whose mission catalogue isn't wired up yet
- * (e.g. Mars is "coming soon"), so the counters still show a real footprint
- * instead of zeros. Real historical Mars surface-landing totals.
+ * Static footprint figures for bodies whose mission catalogue isn't wired up yet,
+ * so the counters still show a real footprint instead of zeros.
  */
-const TELEMETRY_OVERRIDES: Record<string, Telemetry> = {
-  mars: {
-    successfulLandings: 11,
-    activeAssets: 2,
-    impactSites: 6,
-    totalMassKg: 5030,
-    agencies: 3,
-    firstEventYear: 1971,
-    latestEventYear: 2021,
-  },
-};
+const TELEMETRY_OVERRIDES: Record<string, Telemetry> = {};
 
 /**
  * Live-computed global telemetry for a body's surface footprint. Feeds the

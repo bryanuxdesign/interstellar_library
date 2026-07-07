@@ -456,6 +456,85 @@ export const missionVehicleImages: Record<string, MissionImage[]> = {
       credit: 'Lavochkin / Wikimedia Commons',
     },
   ],
+
+  // ── Mars ────────────────────────────────────────────────────────────────
+  'viking-1': [
+    {
+      url: nasa('PIA00354'),
+      caption: 'First colour panorama from the surface of Mars — Viking 1 at Chryse Planitia, July 1976.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'viking-2': [
+    {
+      url: nasa('PIA00502'),
+      caption: 'Viking 2 lander on the Utopia Planitia plain, September 1976.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'mars-pathfinder': [
+    {
+      url: nasa('PIA00756'),
+      caption: 'Sojourner rover beside Mars Pathfinder at Ares Vallis — first wheeled vehicle on another planet.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'spirit': [
+    {
+      url: nasa('PIA10214'),
+      caption: 'Spirit rover on the summit of Husband Hill, Gusev Crater.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'opportunity': [
+    {
+      url: nasa('PIA25347'),
+      caption: 'Opportunity\'s final resting place on the rim of Endeavour Crater, Meridiani Planum.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'curiosity': [
+    {
+      url: nasa('PIA24432'),
+      caption: 'Curiosity self-portrait at Mont Mercou, Gale Crater.',
+      credit: 'NASA / JPL-Caltech',
+    },
+  ],
+  'perseverance': [
+    {
+      url: nasa('PIA24428'),
+      caption: 'Perseverance and the Ingenuity helicopter at Jezero Crater.',
+      credit: 'NASA / JPL-Caltech',
+    },
+  ],
+  'phoenix': [
+    {
+      url: nasa('PIA10762'),
+      caption: 'Phoenix lander workspace after exposing subsurface water ice near the north pole.',
+      credit: 'NASA / JPL',
+    },
+  ],
+  'insight': [
+    {
+      url: nasa('PIA23764'),
+      caption: 'InSight lander with its dome-covered seismometer at Elysium Planitia.',
+      credit: 'NASA / JPL-Caltech',
+    },
+  ],
+  'zhurong': [
+    {
+      url: nasa('PIA24761'),
+      caption: 'Zhurong rover imaged from Tianwen-1 orbit in southern Utopia Planitia.',
+      credit: 'CNSA / NASA',
+    },
+  ],
+  'schiaparelli-edm': [
+    {
+      url: nasa('PIA21132'),
+      caption: 'Before-and-after orbital imagery of the Schiaparelli impact site in Meridiani Planum.',
+      credit: 'NASA / ESA',
+    },
+  ],
 };
 
 export const getVehicleImages = (missionId: string): MissionImage[] =>
