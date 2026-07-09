@@ -10,7 +10,10 @@ import { formatMass } from '@/utils/format';
 import { countryFlag } from '@/utils/flags';
 import { useLiveOrbiterStates } from '@/utils/useLiveOrbiterStates';
 import { ChronologyToggle } from '@/components/ui/ChronologyToggle';
-import { missionCameraAltitude } from '@/utils/missionCamera';
+import { isRoverClassification } from '@/data/roverTraverses';
+import { useRoverTraverses } from '@/utils/useRoverTraverses';
+import { missionCameraAltitude, missionCameraTarget } from '@/utils/missionCamera';
+import { orbiterAltitudeMultiplier } from '@/utils/orbiterCamera';
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
   active: 'Active',
@@ -49,8 +52,12 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
 
   const [expandedSection, setExpandedSection] = useState<SidebarSection>('missions');
 
-  const expandSection = (section: SidebarSection) => {
-    setExpandedSection(section);
+  /** Accordion: pick a section, or switch to the other when clicking the one already open. */
+  const handleSectionClick = (section: SidebarSection) => {
+    if (!hasOrbiters) return;
+    setExpandedSection((current) =>
+      current === section ? (section === 'orbiters' ? 'missions' : 'orbiters') : section,
+    );
   };
 
   const orbitersExpanded = hasOrbiters && expandedSection === 'orbiters';
@@ -69,9 +76,24 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
     [missions, visibleStatuses, chronologyReversed],
   );
 
+  const roverMissionIds = useMemo(
+    () =>
+      planet.id === 'mars'
+        ? visibleMissions
+            .filter((m) => isRoverClassification(m.classification))
+            .map((m) => m.id)
+        : [],
+    [visibleMissions, planet.id],
+  );
+  const roverTraverses = useRoverTraverses(roverMissionIds);
+
   const handleSelect = (mission: Mission) => {
+    const traverse = roverTraverses.get(mission.id) ?? null;
     selectMission(mission.id);
-    flyTo(mission.coordinates, missionCameraAltitude(mission));
+    flyTo(
+      missionCameraTarget(mission, traverse),
+      missionCameraAltitude(mission, traverse),
+    );
     setOpen(false);
   };
 
@@ -80,20 +102,32 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
     const orbiter = orbiters.find((o) => o.id === orbiterId);
     if (!state || !orbiter) return;
     selectOrbiter(orbiterId);
-    const altMultiplier = Math.max(2.4, (state.altKm / planet.radiusKm) * 1.2 + 1.5);
-    flyTo({ lat: state.lat, lng: state.lng }, altMultiplier);
+    flyTo(
+      { lat: state.lat, lng: state.lng },
+      orbiterAltitudeMultiplier(state, planet.id),
+    );
     setOpen(false);
   };
 
   return (
     <>
-      {/* Mobile toggle */}
+      {/* Mobile menu toggle */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="absolute left-4 top-4 z-30 rounded-md border border-strong bg-panel px-3 py-2 text-xs text-ink backdrop-blur lg:hidden"
+        aria-label={open ? 'Close mission registry' : 'Open mission registry'}
+        aria-expanded={open}
+        className="absolute left-3 top-3 z-30 flex h-11 w-11 items-center justify-center rounded-lg border border-strong bg-panel text-ink backdrop-blur transition hover:border-active lg:hidden"
       >
-        {open ? 'Close' : 'Registry'}
+        {open ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M4 7H20M4 12H20M4 17H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        )}
       </button>
 
       <motion.aside
@@ -160,7 +194,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
               <div className="flex shrink-0 items-center justify-between px-4 py-2">
                 <button
                   type="button"
-                  onClick={() => expandSection('orbiters')}
+                  onClick={() => handleSectionClick('orbiters')}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
                 >
                   <Chevron open={orbitersExpanded} />
@@ -234,10 +268,12 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
             <div className="flex shrink-0 items-center justify-between border-b border-sharp px-4 py-2">
               <button
                 type="button"
-                onClick={() => expandSection('missions')}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
+                onClick={() => handleSectionClick('missions')}
+                className={`flex min-w-0 flex-1 items-center gap-2 text-left ${
+                  hasOrbiters ? 'transition hover:opacity-80' : 'cursor-default'
+                }`}
               >
-                <Chevron open={missionsExpanded} />
+                {hasOrbiters && <Chevron open={missionsExpanded} />}
                 <span className="eyebrow">Mission Registry</span>
                 <span className="font-mono text-[9px] text-ink-faint">{visibleMissions.length}</span>
               </button>
@@ -248,6 +284,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                 {visibleMissions.map((mission) => {
                   const color = STATUS_COLORS[mission.status];
                   const selected = selectedMissionId === mission.id;
+                  const traverse = roverTraverses.get(mission.id);
                   return (
                     <button
                       key={mission.id}
@@ -270,6 +307,12 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                         <span className="block truncate text-[10px] text-ink-faint">
                           {countryFlag(mission.country)} {mission.country} · {mission.classification}
                         </span>
+                        {traverse && (
+                          <span className="block truncate text-[9px] text-ink-faint">
+                            {traverse.totalDistanceKm.toFixed(1)} km
+                            {traverse.lastDriveSol != null ? ` · Sol ${traverse.lastDriveSol}` : ''}
+                          </span>
+                        )}
                       </span>
                       <span className="tabular text-[10px] text-ink-faint">
                         {mission.landingDate.slice(0, 4)}

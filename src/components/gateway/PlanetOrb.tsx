@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
 import type { CelestialBody } from '@/types';
-import { CelestialGlobe } from '@/three/CelestialGlobe';
+import { CelestialGlobe, preloadPlanetModel } from '@/three/CelestialGlobe';
 import { markGlobeLoaded } from '@/components/gateway/globeLoadedCache';
 
 export type HeroSlot = 'left' | 'center' | 'right';
@@ -26,8 +26,6 @@ interface PlanetOrbProps {
   /** Bumped on each carousel swap — ignores stale animation-complete callbacks. */
   swapEpoch?: number;
 }
-
-const HERO_GLOBE_IDS = ['moon', 'venus', 'mars'] as const;
 
 const PLANET_IMAGES: Record<string, string> = {
   moon: '/images/planets/moon.jpg',
@@ -81,19 +79,13 @@ function HeroGlobeScene({
 }) {
   return (
     <>
-      {HERO_GLOBE_IDS.map((id) => (
-        <group key={id} visible={focusedId === id}>
-          <CelestialGlobe
-            planetId={id}
-            autoRotate={focusedId === id}
-            rotationSpeed={0.08}
-            radius={2}
-          />
-          {focusedId === id && (
-            <GlobeLoadedMarker planetId={id} onPainted={onPainted} />
-          )}
-        </group>
-      ))}
+      <CelestialGlobe
+        planetId={focusedId}
+        autoRotate
+        rotationSpeed={0.08}
+        radius={2}
+      />
+      <GlobeLoadedMarker planetId={focusedId} onPainted={onPainted} />
     </>
   );
 }
@@ -119,6 +111,10 @@ export function HeroCenterGlobeLayer({
     [onPainted],
   );
 
+  useEffect(() => {
+    preloadPlanetModel(displayGlobeId);
+  }, [displayGlobeId]);
+
   return (
     <motion.div
       className="pointer-events-none absolute left-1/2 top-1/2 z-[15] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full"
@@ -132,7 +128,7 @@ export function HeroCenterGlobeLayer({
       <Canvas
         camera={{ position: [0, 0, 5.2], fov: 38 }}
         dpr={[1, 1.5]}
-        frameloop="always"
+        frameloop={visible ? 'always' : 'never'}
         gl={{ alpha: true, antialias: true }}
         resize={{ debounce: 0, scroll: false }}
         style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }}
@@ -169,6 +165,9 @@ export function PlanetOrb({
     <motion.button
       type="button"
       onClick={onSelect}
+      onMouseEnter={() => {
+        if (hero && has3dGlobe && !focused) preloadPlanetModel(planet.id);
+      }}
       aria-pressed={focused}
       aria-label={
         focused
@@ -225,6 +224,7 @@ export function PlanetOrb({
           dimmed={!focused}
           hidden={hideStaticForGlobe}
           instantReveal={isDeparting}
+          priority={hero && focused}
         />
 
         {!planet.available && focused && (
@@ -257,12 +257,14 @@ function PlanetSphere({
   dimmed,
   hidden,
   instantReveal = false,
+  priority = false,
 }: {
   planet: CelestialBody;
   dimmed: boolean;
   hidden?: boolean;
   /** Skip opacity fade-in when handing off from live globe to static exit motion. */
   instantReveal?: boolean;
+  priority?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const src = PLANET_IMAGES[planet.id];
@@ -297,6 +299,9 @@ function PlanetSphere({
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'low'}
           onError={() => setImgFailed(true)}
         />
       )}

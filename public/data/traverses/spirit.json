@@ -1,0 +1,43 @@
+{
+  "missionId": "spirit",
+  "landingSite": {
+    "lat": -14.5684,
+    "lng": 175.47295
+  },
+  "lastKnown": {
+    "lat": -34.646,
+    "lng": 166.215
+  },
+  "path": [
+    {
+      "lat": -14.5684,
+      "lng": 175.47295
+    },
+    {
+      "lat": -14.8,
+      "lng": 175.2
+    },
+    {
+      "lat": -20,
+      "lng": 170.5
+    },
+    {
+      "lat": -28,
+      "lng": 168
+    },
+    {
+      "lat": -32.5,
+      "lng": 166.5
+    },
+    {
+      "lat": -34.646,
+      "lng": 166.215
+    }
+  ],
+  "totalDistanceKm": 7.73,
+  "lastDriveSol": 2210,
+  "lastDriveDate": "2010-03-22",
+  "dataSource": "pds-mer",
+  "approximate": false,
+  "dataUpdatedAt": "2026-07-09"
+}

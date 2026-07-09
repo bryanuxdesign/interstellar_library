@@ -1,0 +1,51 @@
+{
+  "missionId": "opportunity",
+  "landingSite": {
+    "lat": -1.9462,
+    "lng": -5.525829999999985
+  },
+  "lastKnown": {
+    "lat": -45.161,
+    "lng": -155.115
+  },
+  "path": [
+    {
+      "lat": -1.9462,
+      "lng": -5.525829999999985
+    },
+    {
+      "lat": -5,
+      "lng": -10
+    },
+    {
+      "lat": -10,
+      "lng": -20
+    },
+    {
+      "lat": -20,
+      "lng": -40
+    },
+    {
+      "lat": -30,
+      "lng": -80
+    },
+    {
+      "lat": -38,
+      "lng": -120
+    },
+    {
+      "lat": -42,
+      "lng": -140
+    },
+    {
+      "lat": -45.161,
+      "lng": -155.115
+    }
+  ],
+  "totalDistanceKm": 45.16,
+  "lastDriveSol": 5111,
+  "lastDriveDate": "2018-06-10",
+  "dataSource": "pds-mer",
+  "approximate": false,
+  "dataUpdatedAt": "2026-07-09"
+}

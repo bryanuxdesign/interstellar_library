@@ -1,4 +1,6 @@
 import type { Mission } from '@/types';
+import type { RoverTraverseRecord } from '@/types';
+import { isRoverClassification } from '@/data/roverTraverses';
 import { STATUS_COLORS, VISUAL_FLYBY_ALT_KM } from '@/three/constants';
 import { countryFlag } from '@/utils/flags';
 
@@ -16,9 +18,15 @@ const FLYBY_STATUS_LABEL: Record<Mission['status'], string> = {
   planned: 'Planned Flyby',
 };
 
-export function PinHoverCard({ mission }: { mission: Mission }) {
+interface PinHoverCardProps {
+  mission: Mission;
+  traverse?: RoverTraverseRecord | null;
+}
+
+export function PinHoverCard({ mission, traverse = null }: PinHoverCardProps) {
   const color = STATUS_COLORS[mission.status];
   const isFlyby = mission.classification === 'Flyby';
+  const isRover = isRoverClassification(mission.classification);
   const statusLabel = isFlyby ? FLYBY_STATUS_LABEL[mission.status] : STATUS_LABEL[mission.status];
 
   return (
@@ -55,6 +63,14 @@ export function PinHoverCard({ mission }: { mission: Mission }) {
               {mission.closestApproachKm.toLocaleString()} km
             </span>
             <span className="text-ink-faint"> · track at {VISUAL_FLYBY_ALT_KM} km alt.</span>
+          </div>
+        )}
+        {isRover && traverse && (
+          <div className="mt-1 text-[9px] leading-snug text-ink-faint">
+            {mission.status === 'active' ? 'Last known' : 'Retired at'} · Sol{' '}
+            {traverse.lastDriveSol ?? '—'}
+            <br />
+            <span className="text-ink-soft">{traverse.totalDistanceKm.toFixed(1)} km driven</span>
           </div>
         )}
         <div className="mt-1 flex items-baseline gap-1 text-[9px] leading-snug">

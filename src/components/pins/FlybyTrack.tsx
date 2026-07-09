@@ -7,6 +7,8 @@ import { getPlanet } from '@/data/planets';
 import { latLngToVector3 } from '@/three/coordinateUtils';
 import { GLOBE_RADIUS, STATUS_COLORS, VISUAL_FLYBY_ALT_KM } from '@/three/constants';
 import { useAppStore } from '@/store/useAppStore';
+import { missionCameraAltitude } from '@/utils/missionCamera';
+import { useSurfaceMissionTouch } from '@/utils/surfaceAssetTouch';
 import { PinHoverCard } from './PinHoverCard';
 
 const ARC_SPAN_DEG = 72;
@@ -21,6 +23,14 @@ export function FlybyTrack({ mission }: FlybyTrackProps) {
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const selectMission = useAppStore((s) => s.selectMission);
+  const flyTo = useAppStore((s) => s.flyTo);
+
+  const openMission = () => {
+    selectMission(mission.id);
+    flyTo(mission.coordinates, missionCameraAltitude(mission));
+  };
+
+  const { handleClick } = useSurfaceMissionTouch(mission.id, openMission);
 
   const color = STATUS_COLORS[mission.status];
   const isHovered = hoveredMissionId === mission.id;
@@ -70,11 +80,6 @@ export function FlybyTrack({ mission }: FlybyTrackProps) {
   const handleOut = () => {
     setHoveredMission(null);
     document.body.style.cursor = 'auto';
-  };
-
-  const handleClick = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    selectMission(mission.id);
   };
 
   return (

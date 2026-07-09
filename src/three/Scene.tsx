@@ -2,10 +2,13 @@ import { Suspense, useMemo } from 'react';
 import { Stars } from '@react-three/drei';
 import type { Mission } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
+import { isRoverMission } from '@/data/roverTraverses';
+import { useRoverTraverses } from '@/utils/useRoverTraverses';
 import { CelestialGlobe, GlobeFallback } from './CelestialGlobe';
 import { CameraController } from './CameraController';
 import { MissionPin } from '@/components/pins/MissionPin';
 import { OrbitalLayer } from '@/components/pins/OrbitalLayer';
+import { SelectedRoverLayer } from '@/components/pins/SelectedRoverLayer';
 import { PLANET_ROTATION_OFFSET } from './constants';
 
 interface SceneProps {
@@ -15,11 +18,19 @@ interface SceneProps {
 
 export function Scene({ missions, planetId }: SceneProps) {
   const visibleStatuses = useAppStore((s) => s.visibleStatuses);
+  const selectedMissionId = useAppStore((s) => s.selectedMissionId);
 
   const visibleMissions = useMemo(
     () => missions.filter((m) => visibleStatuses.includes(m.status)),
     [missions, visibleStatuses],
   );
+
+  const roverMissionIds = useMemo(
+    () => visibleMissions.filter((m) => isRoverMission(m.id)).map((m) => m.id),
+    [visibleMissions],
+  );
+
+  const traverses = useRoverTraverses(planetId === 'mars' ? roverMissionIds : []);
 
   return (
     <>
@@ -36,8 +47,14 @@ export function Scene({ missions, planetId }: SceneProps) {
           rotationOffset={((PLANET_ROTATION_OFFSET[planetId] ?? 0) * Math.PI) / 180}
         />
         <OrbitalLayer planetId={planetId} />
+        {planetId === 'mars' && <SelectedRoverLayer traverses={traverses} />}
         {visibleMissions.map((mission) => (
-          <MissionPin key={mission.id} mission={mission} />
+          <MissionPin
+            key={mission.id}
+            mission={mission}
+            traverse={traverses.get(mission.id) ?? null}
+            isSelected={selectedMissionId === mission.id}
+          />
         ))}
       </Suspense>
 

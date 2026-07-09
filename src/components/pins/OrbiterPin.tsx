@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, Mesh, Vector3 } from 'three';
@@ -6,8 +6,10 @@ import type { OrbitalAsset, OrbitalState } from '@/types';
 import { getPlanet } from '@/data/planets';
 import { positionKmToSceneVector3 } from '@/three/coordinateUtils';
 import { propagateOrbiter } from '@/three/orbitPropagation';
+import { orbiterAltitudeMultiplier } from '@/utils/orbiterCamera';
 import { ORBITER_COLOR, PLANET_ROTATION_OFFSET } from '@/three/constants';
 import { useAppStore } from '@/store/useAppStore';
+import { useSurfaceOrbiterTouch } from '@/utils/surfaceAssetTouch';
 import { OrbiterHoverCard } from './OrbiterHoverCard';
 import { OrbitalPlane } from './OrbitalPlane';
 
@@ -25,6 +27,7 @@ export function OrbiterPin({ orbiter }: OrbiterPinProps) {
   const selectedOrbiterId = useAppStore((s) => s.selectedOrbiterId);
   const setHoveredOrbiter = useAppStore((s) => s.setHoveredOrbiter);
   const selectOrbiter = useAppStore((s) => s.selectOrbiter);
+  const flyTo = useAppStore((s) => s.flyTo);
 
   const planetRadiusKm = getPlanet(orbiter.planetId)?.radiusKm ?? 1737.4;
   const offset = PLANET_ROTATION_OFFSET[orbiter.planetId] ?? 0;
@@ -34,6 +37,16 @@ export function OrbiterPin({ orbiter }: OrbiterPinProps) {
   const targetPos = useRef(new Vector3());
   const markerRef = useRef<Group>(null);
   const pulseRef = useRef<Mesh>(null);
+
+  const openOrbiter = useCallback(() => {
+    selectOrbiter(orbiter.id);
+    flyTo(
+      { lat: state.lat, lng: state.lng },
+      orbiterAltitudeMultiplier(state, orbiter.planetId),
+    );
+  }, [selectOrbiter, orbiter.id, orbiter.planetId, state, flyTo]);
+
+  const { handleClick } = useSurfaceOrbiterTouch(orbiter.id, openOrbiter);
 
   useEffect(() => {
     const tick = () => {
@@ -82,11 +95,6 @@ export function OrbiterPin({ orbiter }: OrbiterPinProps) {
     document.body.style.cursor = 'auto';
   };
 
-  const handleClick = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    selectOrbiter(orbiter.id);
-  };
-
   return (
     <group>
       <OrbitalPlane orbiter={orbiter} emphasized={emphasized} />
@@ -117,7 +125,7 @@ export function OrbiterPin({ orbiter }: OrbiterPinProps) {
           </mesh>
         )}
 
-        {isHovered && (
+        {(isHovered || isSelected) && (
           <Html
             position={[0, 0.14, 0]}
             center

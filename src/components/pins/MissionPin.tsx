@@ -2,10 +2,13 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { Group, Mesh, Quaternion, Vector3 } from 'three';
-import type { Mission } from '@/types';
+import type { Mission, RoverTraverseRecord } from '@/types';
 import { latLngToVector3 } from '@/three/coordinateUtils';
 import { GLOBE_RADIUS, STATUS_COLORS } from '@/three/constants';
+import { roverPinCoordinates } from '@/data/roverTraverses';
 import { useAppStore } from '@/store/useAppStore';
+import { missionCameraAltitude, missionCameraTarget } from '@/utils/missionCamera';
+import { useSurfaceMissionTouch } from '@/utils/surfaceAssetTouch';
 import { PinHoverCard } from './PinHoverCard';
 import { FlybyTrack, isFlybyMission } from './FlybyTrack';
 
@@ -16,9 +19,11 @@ const prefersReducedMotion =
 
 interface MissionPinProps {
   mission: Mission;
+  traverse?: RoverTraverseRecord | null;
+  isSelected?: boolean;
 }
 
-export function MissionPin({ mission }: MissionPinProps) {
+export function MissionPin({ mission, traverse = null, isSelected = false }: MissionPinProps) {
   if (isFlybyMission(mission)) {
     return <FlybyTrack mission={mission} />;
   }
@@ -27,18 +32,27 @@ export function MissionPin({ mission }: MissionPinProps) {
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const selectMission = useAppStore((s) => s.selectMission);
+  const flyTo = useAppStore((s) => s.flyTo);
+
+  const openMission = () => {
+    selectMission(mission.id);
+    flyTo(missionCameraTarget(mission, traverse), missionCameraAltitude(mission, traverse));
+  };
+
+  const { handleClick } = useSurfaceMissionTouch(mission.id, openMission);
 
   const color = STATUS_COLORS[mission.status];
   const isHovered = hoveredMissionId === mission.id;
-  const isSelected = selectedMissionId === mission.id;
-  const emphasized = isHovered || isSelected;
+  const emphasized = isHovered || isSelected || selectedMissionId === mission.id;
+
+  const pinCoords = roverPinCoordinates(mission, traverse, isSelected || selectedMissionId === mission.id);
 
   const { position, quaternion } = useMemo(() => {
-    const pos = latLngToVector3(mission.coordinates, GLOBE_RADIUS);
+    const pos = latLngToVector3(pinCoords, GLOBE_RADIUS);
     const normal = pos.clone().normalize();
     const quat = new Quaternion().setFromUnitVectors(UP, normal);
     return { position: pos, quaternion: quat };
-  }, [mission.coordinates]);
+  }, [pinCoords]);
 
   const pulseRef = useRef<Mesh>(null);
   const markerRef = useRef<Group>(null);
@@ -65,11 +79,6 @@ export function MissionPin({ mission }: MissionPinProps) {
   const handleOut = () => {
     setHoveredMission(null);
     document.body.style.cursor = 'auto';
-  };
-
-  const handleClick = (e: { stopPropagation: () => void }) => {
-    e.stopPropagation();
-    selectMission(mission.id);
   };
 
   return (
@@ -110,7 +119,6 @@ export function MissionPin({ mission }: MissionPinProps) {
           </mesh>
         )}
 
-        {/* Base ring flush with the surface */}
         <mesh position={[0, 0, 0.012]}>
           <ringGeometry args={[0.05, 0.062, 32]} />
           <meshBasicMaterial color={color} transparent opacity={0.85} />
@@ -131,7 +139,7 @@ export function MissionPin({ mission }: MissionPinProps) {
           zIndexRange={[40, 0]}
           style={{ pointerEvents: 'none' }}
         >
-          <PinHoverCard mission={mission} />
+          <PinHoverCard mission={mission} traverse={traverse} />
         </Html>
       )}
     </group>

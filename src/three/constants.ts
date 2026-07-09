@@ -27,6 +27,14 @@ export const STATUS_COLORS = {
 /** Orbiter marker colour — distinct from surface active pins. */
 export const ORBITER_COLOR = '#38bdf8';
 
+/** Rover traverse line colours on the Mars globe. */
+export const ROVER_TRAVERSE_COLORS = {
+  active: '#22e06b',
+  decommissioned: '#6b7280',
+} as const;
+
+export const SURFACE_LIFT = 0.015;
+
 /**
  * Longitude offset (degrees) applied when mapping body-fixed coordinates onto
  * each GLB globe mesh. Tune per planet so pins / orbit tracks align with terrain.

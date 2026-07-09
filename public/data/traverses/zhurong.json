@@ -1,0 +1,35 @@
+{
+  "missionId": "zhurong",
+  "landingSite": {
+    "lat": 25.066,
+    "lng": 109.925
+  },
+  "lastKnown": {
+    "lat": 25.08,
+    "lng": 109.94
+  },
+  "path": [
+    {
+      "lat": 25.066,
+      "lng": 109.925
+    },
+    {
+      "lat": 25.072,
+      "lng": 109.93
+    },
+    {
+      "lat": 25.076,
+      "lng": 109.935
+    },
+    {
+      "lat": 25.08,
+      "lng": 109.94
+    }
+  ],
+  "totalDistanceKm": 1.921,
+  "lastDriveSol": 347,
+  "lastDriveDate": "2022-05-06",
+  "dataSource": "static",
+  "approximate": true,
+  "dataUpdatedAt": "2026-07-09"
+}

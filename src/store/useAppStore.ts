@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import type { AssetStatus, Coordinates } from '@/types';
+import { getMissionById } from '@/data/missions';
+import { getOrbiterById } from '@/data/orbiters';
+import { getPlanet } from '@/data/planets';
+import { propagateOrbiter } from '@/three/orbitPropagation';
+import { missionCameraTarget, missionPeekAltitude } from '@/utils/missionCamera';
+import { orbiterCameraCoords, orbiterPeekAltitude } from '@/utils/orbiterCamera';
 
 export const ALL_STATUSES: AssetStatus[] = ['active', 'decommissioned', 'impact', 'planned'];
 
@@ -21,6 +27,10 @@ interface AppState {
   visibleStatuses: AssetStatus[];
   showOrbiters: boolean;
   cameraTarget: CameraTarget | null;
+  /** Last fly-to target — used to re-frame after closing mobile dossier. */
+  lastFocus: { coordinates: Coordinates; altitude: number } | null;
+  /** When true, mobile dossier sheet is scrolled to full-screen. */
+  mobileDossierExpanded: boolean;
   /** When true, missions and timeline run newest → oldest. */
   chronologyReversed: boolean;
 
@@ -36,6 +46,8 @@ interface AppState {
   flyTo: (coordinates: Coordinates, altitude?: number) => void;
   setActiveEvent: (eventId: string | null) => void;
   toggleChronologyReversed: () => void;
+  setMobileDossierExpanded: (expanded: boolean) => void;
+  clearSurfacePreview: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -48,9 +60,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   visibleStatuses: [...ALL_STATUSES],
   showOrbiters: true,
   cameraTarget: null,
+  lastFocus: null,
+  mobileDossierExpanded: false,
   chronologyReversed: false,
 
-  setActivePlanet: (planetId) =>
+  setActivePlanet: (planetId) => {
+    if (get().activePlanetId === planetId) return;
     set({
       activePlanetId: planetId,
       selectedMissionId: null,
@@ -59,9 +74,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       hoveredOrbiterId: null,
       activeEventId: null,
       cameraTarget: null,
+      lastFocus: null,
+      mobileDossierExpanded: false,
       visibleStatuses: [...ALL_STATUSES],
       showOrbiters: true,
-    }),
+    });
+  },
 
   setHoveredMission: (missionId) => set({ hoveredMissionId: missionId }),
 
@@ -75,8 +93,43 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleShowOrbiters: () => set((s) => ({ showOrbiters: !s.showOrbiters })),
 
-  closeDossier: () =>
-    set({ selectedMissionId: null, selectedOrbiterId: null }),
+  closeDossier: () => {
+    const { selectedMissionId, selectedOrbiterId } = get();
+    const mission = selectedMissionId ? getMissionById(selectedMissionId) : undefined;
+    const orbiter = selectedOrbiterId ? getOrbiterById(selectedOrbiterId) : undefined;
+    const orbiterState = orbiter ? propagateOrbiter(orbiter) : null;
+    const planetRadiusKm = orbiter
+      ? getPlanet(orbiter.planetId)?.radiusKm ?? 1737.4
+      : 1737.4;
+
+    const peekCoords = mission
+      ? missionCameraTarget(mission)
+      : orbiterState
+        ? orbiterCameraCoords(orbiterState)
+        : get().lastFocus?.coordinates;
+    const peekAlt = mission
+      ? missionPeekAltitude(mission)
+      : orbiterState
+        ? orbiterPeekAltitude(orbiterState, planetRadiusKm)
+        : get().lastFocus?.altitude ?? 2.1;
+
+    set({
+      selectedMissionId: null,
+      selectedOrbiterId: null,
+      hoveredMissionId: selectedMissionId,
+      hoveredOrbiterId: selectedOrbiterId,
+      mobileDossierExpanded: false,
+      cameraTarget: peekCoords
+        ? { coordinates: peekCoords, altitude: peekAlt, token: Date.now() }
+        : null,
+      lastFocus: peekCoords ? { coordinates: peekCoords, altitude: peekAlt } : get().lastFocus,
+    });
+  },
+
+  clearSurfacePreview: () =>
+    set({ hoveredMissionId: null, hoveredOrbiterId: null }),
+
+  setMobileDossierExpanded: (expanded) => set({ mobileDossierExpanded: expanded }),
 
   toggleStatus: (status) => {
     const current = get().visibleStatuses;
@@ -91,6 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   flyTo: (coordinates, altitude = 1.35) =>
     set({
       cameraTarget: { coordinates, altitude, token: Date.now() },
+      lastFocus: { coordinates, altitude },
     }),
 
   setActiveEvent: (eventId) => set({ activeEventId: eventId }),

@@ -57,10 +57,10 @@ export const marsOrbiters: OrbitalAsset[] = [
     agency: 'NASA / LASP',
     country: 'USA',
     planetId: 'mars',
-    status: 'active',
+    status: 'decommissioned',
     mu: MARS_MU,
     summary:
-      'MAVEN studies atmospheric escape and the Martian climate from an elliptical science orbit, dipping into the upper atmosphere each periapsis.',
+      'MAVEN studied atmospheric escape and the Martian climate from an elliptical science orbit. NASA declared the mission over in June 2026 after the spacecraft went silent in December 2025.',
     elements: {
       a: 4200,
       e: 0.18,

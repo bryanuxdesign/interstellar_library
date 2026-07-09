@@ -1,0 +1,31 @@
+{
+  "missionId": "mars-pathfinder",
+  "landingSite": {
+    "lat": 19.13,
+    "lng": -33.22000000000003
+  },
+  "lastKnown": {
+    "lat": 19.14,
+    "lng": -33.20999999999998
+  },
+  "path": [
+    {
+      "lat": 19.13,
+      "lng": -33.22000000000003
+    },
+    {
+      "lat": 19.135,
+      "lng": -33.214999999999975
+    },
+    {
+      "lat": 19.14,
+      "lng": -33.20999999999998
+    }
+  ],
+  "totalDistanceKm": 0.1,
+  "lastDriveSol": 83,
+  "lastDriveDate": "1997-09-27",
+  "dataSource": "static",
+  "approximate": true,
+  "dataUpdatedAt": "2026-07-09"
+}

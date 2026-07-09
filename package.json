@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "fetch-traverses": "node scripts/fetch-rover-traverses.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",

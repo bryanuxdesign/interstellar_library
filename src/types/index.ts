@@ -52,6 +52,22 @@ export interface Mission {
   sources: MissionSource[];
 }
 
+export type RoverTraverseDataSource = 'nasa-mmgis' | 'pds-mer' | 'static';
+
+/** Mars rover traverse — landing site, path, and last-known position. */
+export interface RoverTraverseRecord {
+  missionId: string;
+  landingSite: Coordinates;
+  lastKnown: Coordinates;
+  path: Coordinates[];
+  totalDistanceKm: number;
+  lastDriveSol: number | null;
+  lastDriveDate: string | null;
+  dataSource: RoverTraverseDataSource;
+  dataUpdatedAt: string;
+  approximate?: boolean;
+}
+
 export interface TimelineEvent {
   id: string;
   missionId: string;

@@ -11,6 +11,15 @@ const PLANET_MODELS: Record<string, string> = {
 };
 
 const DEFAULT_MODEL = PLANET_MODELS.moon;
+const preloaded = new Set<string>();
+
+/** Fetch a planet GLB only when needed — avoids downloading all ~22MB on the home page. */
+export function preloadPlanetModel(planetId: string) {
+  const url = PLANET_MODELS[planetId];
+  if (!url || preloaded.has(url)) return;
+  preloaded.add(url);
+  useGLTF.preload(url);
+}
 
 interface CelestialGlobeProps {
   planetId?: string;
@@ -74,6 +83,3 @@ export function GlobeFallback({ radius = GLOBE_RADIUS }: { radius?: number }) {
   );
 }
 
-useGLTF.preload(PLANET_MODELS.moon);
-useGLTF.preload(PLANET_MODELS.venus);
-useGLTF.preload(PLANET_MODELS.mars);

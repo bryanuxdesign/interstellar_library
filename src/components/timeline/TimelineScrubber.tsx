@@ -6,7 +6,13 @@ import { STATUS_COLORS } from '@/three/constants';
 import { useAppStore } from '@/store/useAppStore';
 import { ChronologyToggle } from '@/components/ui/ChronologyToggle';
 import { getMissionById } from '@/data/missions';
-import { missionCameraAltitude } from '@/utils/missionCamera';
+import { isRoverClassification } from '@/data/roverTraverses';
+import { useRoverTraverses } from '@/utils/useRoverTraverses';
+import { missionCameraAltitude, missionCameraTarget } from '@/utils/missionCamera';
+import { useMediaQuery } from '@/utils/useMediaQuery';
+import { mobileTimelineVisible } from '@/utils/mobileSheetLayout';
+
+const MOBILE_EVENT_GAP_PX = 56;
 
 interface TimelineScrubberProps {
   planetId: string;
@@ -16,11 +22,13 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
   const events = useMemo(() => buildTimeline(planetId), [planetId]);
   const activeEventId = useAppStore((s) => s.activeEventId);
   const selectedMissionId = useAppStore((s) => s.selectedMissionId);
+  const selectedOrbiterId = useAppStore((s) => s.selectedOrbiterId);
   const setActiveEvent = useAppStore((s) => s.setActiveEvent);
   const selectMission = useAppStore((s) => s.selectMission);
   const setHoveredMission = useAppStore((s) => s.setHoveredMission);
   const flyTo = useAppStore((s) => s.flyTo);
   const chronologyReversed = useAppStore((s) => s.chronologyReversed);
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -58,6 +66,18 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
     return marks;
   }, [minYear, maxYear]);
 
+  const roverMissionIds = useMemo(
+    () =>
+      planetId === 'mars'
+        ? events
+            .map((e) => getMissionById(e.missionId))
+            .filter((m) => m && isRoverClassification(m.classification))
+            .map((m) => m!.id)
+        : [],
+    [events, planetId],
+  );
+  const roverTraverses = useRoverTraverses(roverMissionIds);
+
   const currentIndex = useMemo(
     () => orderedEvents.findIndex((e) => e.missionId === selectedMissionId),
     [orderedEvents, selectedMissionId],
@@ -67,7 +87,11 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
     setActiveEvent(event.id);
     selectMission(event.missionId);
     const mission = getMissionById(event.missionId);
-    flyTo(event.coordinates, mission ? missionCameraAltitude(mission) : 1.35);
+    const traverse = roverTraverses.get(event.missionId) ?? null;
+    flyTo(
+      mission ? missionCameraTarget(mission, traverse) : event.coordinates,
+      mission ? missionCameraAltitude(mission, traverse) : 1.35,
+    );
   };
 
   const step = (dir: -1 | 1) => {
@@ -85,17 +109,29 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
   const nextDisabled =
     currentIndex === -1 ? false : currentIndex >= orderedEvents.length - 1;
 
+  const trackMinWidth = useMemo(() => {
+    if (!isMobile) return undefined;
+    return Math.max(events.length * MOBILE_EVENT_GAP_PX, 360);
+  }, [isMobile, events.length]);
+
+  const mobileDossierOpen = isMobile && Boolean(selectedMissionId || selectedOrbiterId);
+  const timelineVisible = mobileTimelineVisible(isMobile, mobileDossierOpen);
+
   return (
     <motion.div
       initial={{ y: 40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }}
-      className={`absolute bottom-0 left-0 right-0 z-20 border-t border-sharp bg-panel/90 backdrop-blur-xl lg:left-[280px] ${
-        selectedMissionId ? 'md:right-[400px]' : 'right-0'
-      }`}
+      animate={{
+        y: 0,
+        opacity: timelineVisible ? 1 : 0,
+        bottom: 0,
+      }}
+      transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut', opacity: { duration: 0.25 } }}
+      className={`absolute left-0 right-0 z-20 border-t border-sharp bg-panel/90 backdrop-blur-xl lg:left-[280px] ${
+        selectedMissionId || selectedOrbiterId ? 'max-md:right-0 md:right-[400px]' : 'right-0'
+      } ${timelineVisible ? '' : 'max-md:hidden max-md:pointer-events-none'}`}
     >
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3 lg:px-6">
-        <span className="eyebrow">Chronological Scrubber</span>
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-3 max-md:px-3 max-md:pt-2 max-md:pb-0 lg:px-6">
+        <span className="eyebrow max-md:text-[9px]">Chronological Scrubber</span>
         <div className="flex items-center gap-3">
           <ChronologyToggle compact />
           <span className="tabular text-[11px] text-ink-faint">
@@ -104,10 +140,17 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 px-3 pb-5 pt-4 lg:px-5">
+      <div className="flex items-center gap-2 px-3 pb-5 pt-4 max-md:px-2 max-md:pb-3 max-md:pt-2 lg:px-5">
         <ArrowButton dir="prev" disabled={prevDisabled} onClick={() => step(-1)} />
 
-        <div className="relative mx-1 h-12 flex-1">
+        <div
+          className={`relative mx-1 min-w-0 flex-1 ${isMobile ? 'overflow-x-auto overscroll-x-contain pb-1' : ''}`}
+          style={isMobile ? { WebkitOverflowScrolling: 'touch' } : undefined}
+        >
+          <div
+            className="relative h-14 max-md:h-11"
+            style={trackMinWidth ? { minWidth: trackMinWidth, width: '100%' } : { width: '100%' }}
+          >
           {/* Base rail */}
           <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-strong" />
 
@@ -147,7 +190,7 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
                   setHoverId(null);
                   setHoveredMission(null);
                 }}
-                className="absolute top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                className="absolute top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center max-md:h-11 max-md:w-11"
                 style={{ left: `${fraction(event)}%` }}
                 aria-label={`${event.label} (${event.date.slice(0, 4)})`}
               >
@@ -169,6 +212,7 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
               </button>
             );
           })}
+          </div>
         </div>
 
         <ArrowButton dir="next" disabled={nextDisabled} onClick={() => step(1)} />

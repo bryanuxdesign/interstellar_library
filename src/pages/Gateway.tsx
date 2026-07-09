@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stars } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
 import { GATEWAY_PLANET_ORDER, getPlanet } from '@/data/planets';
 import { computeTelemetry } from '@/data/telemetry';
+import { preloadPlanetModel } from '@/three/CelestialGlobe';
 import { HeroCenterGlobeLayer, PlanetOrb, HERO_ORB_SIZE, type HeroSlot } from '@/components/gateway/PlanetOrb';
 import { isGlobeLoaded } from '@/components/gateway/globeLoadedCache';
 import { TelemetryCounter } from '@/components/gateway/TelemetryCounter';
@@ -31,6 +32,24 @@ export function Gateway() {
   const [carouselIdle, setCarouselIdle] = useState(true);
   const [swapEpoch, setSwapEpoch] = useState(0);
   const swapEpochRef = useRef(0);
+  /** Defer the heavy hero WebGL layer until after first paint. */
+  const [globeLayerReady, setGlobeLayerReady] = useState(false);
+
+  useEffect(() => {
+    preloadPlanetModel('moon');
+    const ric = window.requestIdleCallback?.(
+      () => {
+        setGlobeLayerReady(true);
+        void import('@/pages/PlanetView');
+      },
+      { timeout: 1200 },
+    );
+    const tid = ric === undefined ? window.setTimeout(() => setGlobeLayerReady(true), 400) : undefined;
+    return () => {
+      if (ric !== undefined) window.cancelIdleCallback?.(ric);
+      if (tid !== undefined) window.clearTimeout(tid);
+    };
+  }, []);
 
   const heroPlanets = useMemo(
     () =>
@@ -113,8 +132,8 @@ export function Gateway() {
     >
       {/* Starfield backdrop */}
       <div className="absolute inset-0">
-        <Canvas camera={{ position: [0, 0, 6], fov: 42 }} dpr={[1, 2]}>
-          <Stars radius={90} depth={50} count={5000} factor={4} fade speed={0.4} />
+        <Canvas camera={{ position: [0, 0, 6], fov: 42 }} dpr={[1, 1.25]}>
+          <Stars radius={90} depth={50} count={2000} factor={3.5} fade speed={0.3} />
         </Canvas>
       </div>
 
@@ -152,11 +171,13 @@ export function Gateway() {
                 hero
               />
             ))}
-            <HeroCenterGlobeLayer
-              displayGlobeId={displayGlobeId}
-              visible={globeVisible}
-              onPainted={handlePainted}
-            />
+            {globeLayerReady && (
+              <HeroCenterGlobeLayer
+                displayGlobeId={displayGlobeId}
+                visible={globeVisible}
+                onPainted={handlePainted}
+              />
+            )}
             {canExploreFocused && (
               <button
                 type="button"
