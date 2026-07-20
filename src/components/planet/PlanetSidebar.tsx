@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { AssetStatus, CelestialBody, Mission } from '@/types';
 import { useAppStore, ALL_STATUSES } from '@/store/useAppStore';
 import { STATUS_COLORS, ORBITER_COLOR } from '@/three/constants';
 import { computeTelemetry } from '@/data/telemetry';
 import { getOrbitersByPlanet } from '@/data/orbiters';
+import {
+  formatMoonPeriod,
+  moonsForPlanet,
+  type PlanetMoonDef,
+} from '@/data/planetMoons';
 import { formatMass } from '@/utils/format';
 import { countryFlag } from '@/utils/flags';
 import { useLiveOrbiterStates } from '@/utils/useLiveOrbiterStates';
@@ -22,7 +27,9 @@ const STATUS_LABEL: Record<AssetStatus, string> = {
   planned: 'Planned',
 };
 
-type SidebarSection = 'orbiters' | 'missions';
+const MOON_ACCENT = '#a8b4c4';
+
+type SidebarSection = 'moons' | 'orbiters' | 'missions';
 
 interface PlanetSidebarProps {
   planet: CelestialBody;
@@ -31,7 +38,14 @@ interface PlanetSidebarProps {
 
 export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
+
+  const fromPath =
+    (location.state as { from?: unknown } | null)?.from === '/solar-system'
+      ? '/solar-system'
+      : '/';
+  const backLabel = fromPath === '/solar-system' ? '← Solar System' : '← Gateway';
 
   const visibleStatuses = useAppStore((s) => s.visibleStatuses);
   const toggleStatus = useAppStore((s) => s.toggleStatus);
@@ -45,23 +59,41 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
   const selectedOrbiterId = useAppStore((s) => s.selectedOrbiterId);
   const setHoveredOrbiter = useAppStore((s) => s.setHoveredOrbiter);
   const selectOrbiter = useAppStore((s) => s.selectOrbiter);
+  const focusedMoonId = useAppStore((s) => s.focusedMoonId);
+  const focusMoon = useAppStore((s) => s.focusMoon);
+  const lastFocus = useAppStore((s) => s.lastFocus);
 
   const orbiters = useMemo(() => getOrbitersByPlanet(planet.id), [planet.id]);
   const orbiterStates = useLiveOrbiterStates(orbiters);
+  const moons = useMemo(() => moonsForPlanet(planet.id), [planet.id]);
   const hasOrbiters = orbiters.length > 0;
+  const hasMoons = moons.length > 0;
+  const hasAccordion = hasOrbiters || hasMoons;
 
-  const [expandedSection, setExpandedSection] = useState<SidebarSection>('missions');
+  const [expandedSection, setExpandedSection] = useState<SidebarSection>(() =>
+    moons.length > 0 && missions.length === 0 ? 'moons' : 'missions',
+  );
 
-  /** Accordion: pick a section, or switch to the other when clicking the one already open. */
+  // Reset accordion when switching archive worlds.
+  useEffect(() => {
+    setExpandedSection(hasMoons && missions.length === 0 ? 'moons' : 'missions');
+  }, [planet.id, hasMoons, missions.length]);
+
+  /** Accordion: one open section among moons / orbiters / missions. */
   const handleSectionClick = (section: SidebarSection) => {
-    if (!hasOrbiters) return;
-    setExpandedSection((current) =>
-      current === section ? (section === 'orbiters' ? 'missions' : 'orbiters') : section,
-    );
+    if (!hasAccordion) return;
+    setExpandedSection((current) => {
+      if (current === section) {
+        if (section === 'missions') return hasMoons ? 'moons' : hasOrbiters ? 'orbiters' : 'missions';
+        return 'missions';
+      }
+      return section;
+    });
   };
 
+  const moonsExpanded = hasMoons && expandedSection === 'moons';
   const orbitersExpanded = hasOrbiters && expandedSection === 'orbiters';
-  const missionsExpanded = !hasOrbiters || expandedSection === 'missions';
+  const missionsExpanded = !hasAccordion || expandedSection === 'missions';
 
   const telemetry = useMemo(() => computeTelemetry(planet.id), [planet.id]);
 
@@ -109,6 +141,20 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
     setOpen(false);
   };
 
+  const handleSelectMoon = (moon: PlanetMoonDef) => {
+    focusMoon(moon.id);
+    setOpen(false);
+  };
+
+  const handleFocusPlanet = () => {
+    focusMoon(null);
+    flyTo(
+      lastFocus?.coordinates ?? { lat: 0, lng: 0 },
+      lastFocus?.altitude ?? 2.4,
+    );
+    setOpen(false);
+  };
+
   return (
     <>
       {/* Mobile menu toggle */}
@@ -141,10 +187,10 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
         <div className="border-b border-sharp p-5 pt-14 lg:pt-5">
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate(fromPath)}
             className="eyebrow mb-4 transition hover:text-active"
           >
-            ← Gateway
+            {backLabel}
           </button>
           <h2 className="text-2xl font-bold text-ink">{planet.name}</h2>
           <p className="mt-1 text-[11px] text-ink-faint">{planet.subtitle}</p>
@@ -185,6 +231,72 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
 
         {/* Collapsible registry sections */}
         <div className="flex min-h-0 flex-1 flex-col">
+          {hasMoons && (
+            <section
+              className={`flex flex-col border-b border-sharp ${
+                moonsExpanded ? 'min-h-0 flex-1' : 'shrink-0'
+              }`}
+            >
+              <div className="flex shrink-0 items-center justify-between px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => handleSectionClick('moons')}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
+                >
+                  <Chevron open={moonsExpanded} />
+                  <span className="eyebrow">Moons</span>
+                  <span className="font-mono text-[9px] text-ink-faint">{moons.length}</span>
+                </button>
+                {focusedMoonId && (
+                  <button
+                    type="button"
+                    onClick={handleFocusPlanet}
+                    className="ml-2 shrink-0 rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-medium text-ink-faint transition hover:border-white/30 hover:text-ink"
+                  >
+                    Focus {planet.name}
+                  </button>
+                )}
+              </div>
+              {moonsExpanded && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
+                  {moons.map((moon) => {
+                    const selected = focusedMoonId === moon.id;
+                    return (
+                      <button
+                        key={moon.id}
+                        type="button"
+                        onClick={() => handleSelectMoon(moon)}
+                        className={`mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
+                          selected ? 'bg-raised' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: MOON_ACCENT }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] text-ink">
+                            {moon.name}
+                          </span>
+                          <span className="block truncate text-[10px] text-ink-faint">
+                            {Math.round(moon.semiMajorKm).toLocaleString()} km
+                            {moon.inclinationDeg >= 90 ? ' · retrograde' : ''}
+                          </span>
+                        </span>
+                        <span className="tabular text-right text-[9px] leading-tight text-ink-faint">
+                          {formatMoonPeriod(moon.periodHours)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <p className="px-3 py-2 text-[9px] leading-relaxed text-ink-faint">
+                    Real-time sidereal orbits from J2000 elements — motion is archive-accurate (nearly still over short views).
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {hasOrbiters && (
             <section
               className={`flex flex-col border-b border-sharp ${
@@ -270,10 +382,10 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                 type="button"
                 onClick={() => handleSectionClick('missions')}
                 className={`flex min-w-0 flex-1 items-center gap-2 text-left ${
-                  hasOrbiters ? 'transition hover:opacity-80' : 'cursor-default'
+                  hasAccordion ? 'transition hover:opacity-80' : 'cursor-default'
                 }`}
               >
-                {hasOrbiters && <Chevron open={missionsExpanded} />}
+                {hasAccordion && <Chevron open={missionsExpanded} />}
                 <span className="eyebrow">Mission Registry</span>
                 <span className="font-mono text-[9px] text-ink-faint">{visibleMissions.length}</span>
               </button>
@@ -322,7 +434,9 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                 })}
                 {visibleMissions.length === 0 && (
                   <p className="px-3 py-6 text-center text-xs text-ink-faint">
-                    No hardware matches the active filters.
+                    {missions.length === 0
+                      ? 'Globe view live — surface catalogue coming later.'
+                      : 'No hardware matches the active filters.'}
                   </p>
                 )}
               </div>

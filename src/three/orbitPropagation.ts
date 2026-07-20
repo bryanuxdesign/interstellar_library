@@ -2,6 +2,7 @@ import type { OrbitalAsset, OrbitalElements, OrbitalState } from '@/types';
 import { cartesianToLatLng, positionKmToSceneVector3 } from './coordinateUtils';
 import { getPlanet } from '@/data/planets';
 import { getOrbitersByPlanet } from '@/data/orbiters';
+import { moonsForPlanet } from '@/data/planetMoons';
 import { apoapsisRadiusKm } from './orbitElements';
 import {
   CAMERA_ORBIT_MARGIN,
@@ -36,6 +37,10 @@ export function maxCameraDistanceForPlanet(planetId: string): number {
   for (const o of orbiters) {
     const apo = apoapsisRadiusKm(o.elements.a, o.elements.e);
     maxApoKm = Math.max(maxApoKm, apo);
+  }
+
+  for (const moon of moonsForPlanet(planetId)) {
+    maxApoKm = Math.max(maxApoKm, Math.abs(moon.semiMajorKm));
   }
 
   const maxSceneRadius = GLOBE_RADIUS * (maxApoKm / planetRadiusKm);

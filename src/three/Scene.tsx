@@ -5,7 +5,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { isRoverMission } from '@/data/roverTraverses';
 import { useRoverTraverses } from '@/utils/useRoverTraverses';
 import { CelestialGlobe, GlobeFallback } from './CelestialGlobe';
+import { PlanetMoons } from './PlanetMoons';
 import { CameraController } from './CameraController';
+import { moonsForPlanet } from '@/data/planetMoons';
 import { MissionPin } from '@/components/pins/MissionPin';
 import { OrbitalLayer } from '@/components/pins/OrbitalLayer';
 import { SelectedRoverLayer } from '@/components/pins/SelectedRoverLayer';
@@ -46,6 +48,7 @@ export function Scene({ missions, planetId }: SceneProps) {
           planetId={planetId}
           rotationOffset={((PLANET_ROTATION_OFFSET[planetId] ?? 0) * Math.PI) / 180}
         />
+        {moonsForPlanet(planetId).length > 0 && <PlanetMoons planetId={planetId} />}
         <OrbitalLayer planetId={planetId} />
         {planetId === 'mars' && <SelectedRoverLayer traverses={traverses} />}
         {visibleMissions.map((mission) => (

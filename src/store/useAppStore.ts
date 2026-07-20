@@ -33,6 +33,8 @@ interface AppState {
   mobileDossierExpanded: boolean;
   /** When true, missions and timeline run newest → oldest. */
   chronologyReversed: boolean;
+  /** Archive moon currently framing the camera (null = planet). */
+  focusedMoonId: string | null;
 
   setActivePlanet: (planetId: string | null) => void;
   setHoveredMission: (missionId: string | null) => void;
@@ -48,6 +50,7 @@ interface AppState {
   toggleChronologyReversed: () => void;
   setMobileDossierExpanded: (expanded: boolean) => void;
   clearSurfacePreview: () => void;
+  focusMoon: (moonId: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -63,6 +66,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastFocus: null,
   mobileDossierExpanded: false,
   chronologyReversed: false,
+  focusedMoonId: null,
 
   setActivePlanet: (planetId) => {
     if (get().activePlanetId === planetId) return;
@@ -78,18 +82,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       mobileDossierExpanded: false,
       visibleStatuses: [...ALL_STATUSES],
       showOrbiters: true,
+      focusedMoonId: null,
     });
   },
 
   setHoveredMission: (missionId) => set({ hoveredMissionId: missionId }),
 
   selectMission: (missionId) =>
-    set({ selectedMissionId: missionId, selectedOrbiterId: null }),
+    set({ selectedMissionId: missionId, selectedOrbiterId: null, focusedMoonId: null }),
 
   setHoveredOrbiter: (orbiterId) => set({ hoveredOrbiterId: orbiterId }),
 
   selectOrbiter: (orbiterId) =>
-    set({ selectedOrbiterId: orbiterId, selectedMissionId: null }),
+    set({ selectedOrbiterId: orbiterId, selectedMissionId: null, focusedMoonId: null }),
 
   toggleShowOrbiters: () => set((s) => ({ showOrbiters: !s.showOrbiters })),
 
@@ -145,6 +150,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       cameraTarget: { coordinates, altitude, token: Date.now() },
       lastFocus: { coordinates, altitude },
+      focusedMoonId: null,
+    }),
+
+  focusMoon: (moonId) =>
+    set({
+      focusedMoonId: moonId,
+      selectedMissionId: null,
+      selectedOrbiterId: null,
+      // Cancel any pending lat/lng fly-to when framing a moon.
+      cameraTarget: moonId ? null : get().cameraTarget,
     }),
 
   setActiveEvent: (eventId) => set({ activeEventId: eventId }),

@@ -44,7 +44,12 @@ export const SURFACE_LIFT = 0.015;
  * Apply the same value here and on CelestialGlobe.rotationOffset (radians).
  */
 export const PLANET_ROTATION_OFFSET: Record<string, number> = {
+  mercury: 0,
+  venus: 0,
   moon: 0,
   mars: 0,
-  venus: 0,
+  jupiter: 0,
+  saturn: 0,
+  uranus: 0,
+  neptune: 0,
 };

@@ -38,6 +38,9 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
   );
 
   const { minTime, span, minYear, maxYear } = useMemo(() => {
+    if (events.length === 0) {
+      return { minTime: 0, span: 1, minYear: 0, maxYear: 0 };
+    }
     const times = events.map((e) => new Date(e.date).getTime());
     const min = Math.min(...times);
     const max = Math.max(...times);
@@ -116,6 +119,9 @@ export function TimelineScrubber({ planetId }: TimelineScrubberProps) {
 
   const mobileDossierOpen = isMobile && Boolean(selectedMissionId || selectedOrbiterId);
   const timelineVisible = mobileTimelineVisible(isMobile, mobileDossierOpen);
+
+  // Globe-first worlds (no mission catalogue yet) hide the scrubber entirely.
+  if (events.length === 0) return null;
 
   return (
     <motion.div

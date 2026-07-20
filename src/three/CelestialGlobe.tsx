@@ -4,10 +4,16 @@ import { useGLTF } from '@react-three/drei';
 import { Box3, Group, Mesh, Vector3 } from 'three';
 import { GLOBE_RADIUS } from './constants';
 
+/** NASA VTAD / Solar System GLB models, self-hosted under public/models/. */
 const PLANET_MODELS: Record<string, string> = {
-  moon: '/models/moon.glb',
+  mercury: '/models/mercury.glb',
   venus: '/models/venus.glb',
+  moon: '/models/moon.glb',
   mars: '/models/mars.glb',
+  jupiter: '/models/jupiter.glb',
+  saturn: '/models/saturn.glb',
+  uranus: '/models/uranus.glb',
+  neptune: '/models/neptune.glb',
 };
 
 const DEFAULT_MODEL = PLANET_MODELS.moon;

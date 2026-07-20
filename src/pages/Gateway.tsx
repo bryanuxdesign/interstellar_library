@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Stars } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import { motion } from 'framer-motion';
@@ -10,6 +10,7 @@ import { HeroCenterGlobeLayer, PlanetOrb, HERO_ORB_SIZE, type HeroSlot } from '@
 import { isGlobeLoaded } from '@/components/gateway/globeLoadedCache';
 import { TelemetryCounter } from '@/components/gateway/TelemetryCounter';
 import { CreatorAboutButton } from '@/components/ui/CreatorAbout';
+import { useIsDesktop } from '@/hooks/useIsDesktop';
 
 const SLOT_ORDER: HeroSlot[] = ['left', 'center', 'right'];
 
@@ -24,6 +25,7 @@ function initialSlots(): Record<string, HeroSlot> {
 
 export function Gateway() {
   const navigate = useNavigate();
+  const isDesktop = useIsDesktop();
   const [slots, setSlots] = useState<Record<string, HeroSlot>>(initialSlots);
   const [departingId, setDepartingId] = useState<string | null>(null);
   const [paintedId, setPaintedId] = useState<string | null>(null);
@@ -147,6 +149,46 @@ export function Gateway() {
         </div>
         <div className="pointer-events-auto flex flex-col items-end gap-2">
           <CreatorAboutButton />
+          {isDesktop !== false ? (
+            <>
+              <Link
+                to="/solar-system"
+                className="eyebrow text-ink-faint transition hover:text-active"
+              >
+                Solar System →
+              </Link>
+              <Link
+                to="/lander"
+                className="eyebrow text-ink-faint transition hover:text-active"
+              >
+                Lunar Descent →
+              </Link>
+            </>
+          ) : null}
+          <nav
+            className="mt-1 flex max-w-[min(92vw,420px)] flex-wrap justify-end gap-x-2.5 gap-y-1"
+            aria-label="Planet archives"
+          >
+            {(
+              [
+                ['mercury', 'Mercury'],
+                ['venus', 'Venus'],
+                ['mars', 'Mars'],
+                ['jupiter', 'Jupiter'],
+                ['saturn', 'Saturn'],
+                ['uranus', 'Uranus'],
+                ['neptune', 'Neptune'],
+              ] as const
+            ).map(([id, label]) => (
+              <Link
+                key={id}
+                to={`/${id}`}
+                className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint/70 transition hover:text-active"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
           <span className="eyebrow hidden sm:block">MISSION CONTROL // v0.1</span>
         </div>
       </header>
