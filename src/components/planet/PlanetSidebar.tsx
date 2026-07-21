@@ -6,11 +6,13 @@ import { useAppStore, ALL_STATUSES } from '@/store/useAppStore';
 import { STATUS_COLORS, ORBITER_COLOR } from '@/three/constants';
 import { computeTelemetry } from '@/data/telemetry';
 import { getOrbitersByPlanet } from '@/data/orbiters';
+import { getPlanet } from '@/data/planets';
 import {
   formatMoonPeriod,
   moonsForPlanet,
   type PlanetMoonDef,
 } from '@/data/planetMoons';
+import { SOLAR_PHENOMENA } from '@/data/solarPhenomena';
 import { formatMass } from '@/utils/format';
 import { countryFlag } from '@/utils/flags';
 import { useLiveOrbiterStates } from '@/utils/useLiveOrbiterStates';
@@ -29,14 +31,26 @@ const STATUS_LABEL: Record<AssetStatus, string> = {
 
 const MOON_ACCENT = '#a8b4c4';
 
-type SidebarSection = 'moons' | 'orbiters' | 'missions';
+type SidebarSection = 'moons' | 'orbiters' | 'missions' | 'phenomena';
 
 interface PlanetSidebarProps {
   planet: CelestialBody;
   missions: Mission[];
+  /**
+   * Earth+Moon archive: list moons (and Focus Earth) from the host world even
+   * when the sidebar is showing Moon surface content.
+   */
+  moonHostPlanetId?: string;
+  /** Leave Luna focus and reframe Earth (shared with Focus Earth / Esc). */
+  onFocusHostPlanet?: () => void;
 }
 
-export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
+export function PlanetSidebar({
+  planet,
+  missions,
+  moonHostPlanetId,
+  onFocusHostPlanet,
+}: PlanetSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -65,27 +79,35 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
 
   const orbiters = useMemo(() => getOrbitersByPlanet(planet.id), [planet.id]);
   const orbiterStates = useLiveOrbiterStates(orbiters);
-  const moons = useMemo(() => moonsForPlanet(planet.id), [planet.id]);
+  const moonsParentId = moonHostPlanetId ?? planet.id;
+  const moons = useMemo(() => moonsForPlanet(moonsParentId), [moonsParentId]);
+  const hostPlanet = moonHostPlanetId ? getPlanet(moonHostPlanetId) : undefined;
+  const isSun = planet.id === 'sun';
   const hasOrbiters = orbiters.length > 0;
   const hasMoons = moons.length > 0;
-  const hasAccordion = hasOrbiters || hasMoons;
+  const hasPhenomena = isSun && SOLAR_PHENOMENA.length > 0;
+  const hasAccordion = hasOrbiters || hasMoons || hasPhenomena;
 
   const [expandedSection, setExpandedSection] = useState<SidebarSection>(() =>
-    moons.length > 0 && missions.length === 0 ? 'moons' : 'missions',
+    isSun ? 'phenomena' : moons.length > 0 && missions.length === 0 ? 'moons' : 'missions',
   );
 
   // Reset accordion when switching archive worlds.
   useEffect(() => {
-    setExpandedSection(hasMoons && missions.length === 0 ? 'moons' : 'missions');
-  }, [planet.id, hasMoons, missions.length]);
+    setExpandedSection(
+      isSun ? 'phenomena' : hasMoons && missions.length === 0 ? 'moons' : 'missions',
+    );
+  }, [planet.id, hasMoons, missions.length, isSun]);
 
-  /** Accordion: one open section among moons / orbiters / missions. */
+  /** Accordion: one open section among moons / orbiters / missions / phenomena. */
   const handleSectionClick = (section: SidebarSection) => {
     if (!hasAccordion) return;
     setExpandedSection((current) => {
       if (current === section) {
-        if (section === 'missions') return hasMoons ? 'moons' : hasOrbiters ? 'orbiters' : 'missions';
-        return 'missions';
+        if (section === 'missions') {
+          return hasPhenomena ? 'phenomena' : hasMoons ? 'moons' : hasOrbiters ? 'orbiters' : 'missions';
+        }
+        return isSun ? 'phenomena' : 'missions';
       }
       return section;
     });
@@ -93,7 +115,9 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
 
   const moonsExpanded = hasMoons && expandedSection === 'moons';
   const orbitersExpanded = hasOrbiters && expandedSection === 'orbiters';
-  const missionsExpanded = !hasAccordion || expandedSection === 'missions';
+  const phenomenaExpanded = hasPhenomena && expandedSection === 'phenomena';
+  const missionsExpanded =
+    !isSun && (!hasAccordion || expandedSection === 'missions');
 
   const telemetry = useMemo(() => computeTelemetry(planet.id), [planet.id]);
 
@@ -141,17 +165,24 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
     setOpen(false);
   };
 
-  const handleSelectMoon = (moon: PlanetMoonDef) => {
-    focusMoon(moon.id);
+  const handleFocusPlanet = () => {
+    if (onFocusHostPlanet) {
+      onFocusHostPlanet();
+      setOpen(false);
+      return;
+    }
+    focusMoon(null);
+    if (!hostPlanet) {
+      flyTo(
+        lastFocus?.coordinates ?? { lat: 0, lng: 0 },
+        lastFocus?.altitude ?? 2.4,
+      );
+    }
     setOpen(false);
   };
 
-  const handleFocusPlanet = () => {
-    focusMoon(null);
-    flyTo(
-      lastFocus?.coordinates ?? { lat: 0, lng: 0 },
-      lastFocus?.altitude ?? 2.4,
-    );
+  const handleSelectMoon = (moon: PlanetMoonDef) => {
+    focusMoon(moon.id);
     setOpen(false);
   };
 
@@ -163,7 +194,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? 'Close mission registry' : 'Open mission registry'}
         aria-expanded={open}
-        className="absolute left-3 top-3 z-30 flex h-11 w-11 items-center justify-center rounded-lg border border-strong bg-panel text-ink backdrop-blur transition hover:border-active lg:hidden"
+        className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-lg border border-strong bg-panel text-ink backdrop-blur transition hover:border-active lg:hidden"
       >
         {open ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -176,11 +207,20 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
         )}
       </button>
 
+      {open ? (
+        <button
+          type="button"
+          aria-label="Close registry overlay"
+          className="absolute inset-0 z-[19] bg-black/45 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
+
       <motion.aside
         initial={{ x: -32, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
-        className={`absolute left-0 top-0 z-20 flex h-full w-[280px] flex-col border-r border-sharp bg-panel backdrop-blur-xl transition-transform lg:translate-x-0 ${
+        className={`absolute left-0 top-0 z-20 flex h-full w-[min(100vw-3rem,300px)] flex-col border-r border-sharp bg-panel backdrop-blur-xl transition-transform lg:w-[280px] lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -194,19 +234,37 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
           </button>
           <h2 className="text-2xl font-bold text-ink">{planet.name}</h2>
           <p className="mt-1 text-[11px] text-ink-faint">{planet.subtitle}</p>
+          {moonHostPlanetId === 'earth' && planet.id === 'moon' ? (
+            <p className="mt-1 text-[10px] tracking-wide text-ink-faint">
+              Earth archive · lunar surface
+            </p>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <MiniStat label="Landings" value={telemetry.successfulLandings} />
-            <MiniStat label="Active" value={telemetry.activeAssets} accent="#22e06b" />
-            <MiniStat label="Impacts" value={telemetry.impactSites} accent="#ff453a" />
+            {isSun ? (
+              <>
+                <MiniStat label="Spots" value={SOLAR_PHENOMENA.filter((p) => p.kind === 'sunspot').length} accent="#f59e0b" />
+                <MiniStat label="Flares" value={SOLAR_PHENOMENA.filter((p) => p.kind === 'flare' || p.kind === 'cme').length} accent="#fb923c" />
+                <MiniStat label="Cycle" value={25} accent="#fde68a" />
+              </>
+            ) : (
+              <>
+                <MiniStat label="Landings" value={telemetry.successfulLandings} />
+                <MiniStat label="Active" value={telemetry.activeAssets} accent="#22e06b" />
+                <MiniStat label="Impacts" value={telemetry.impactSites} accent="#ff453a" />
+              </>
+            )}
           </div>
 
           <p className="mt-3 text-[11px] leading-relaxed text-ink-soft">
-            {telemetry.agencies} agencies · {formatMass(telemetry.totalMassKg)} on the surface
+            {isSun
+              ? 'Photosphere plate with animated sunspots, corona, and flare eruptions — museum-scale, not a forecast.'
+              : `${telemetry.agencies} agencies · ${formatMass(telemetry.totalMassKg)} on the surface`}
           </p>
         </div>
 
-        {/* Filter chips */}
+        {/* Filter chips — surface missions only */}
+        {!isSun && (
         <div className="flex flex-wrap gap-2 border-b border-sharp p-4">
           {ALL_STATUSES.map((status) => {
             const active = visibleStatuses.includes(status);
@@ -228,9 +286,66 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
             );
           })}
         </div>
+        )}
 
         {/* Collapsible registry sections */}
         <div className="flex min-h-0 flex-1 flex-col">
+          {hasPhenomena && (
+            <section
+              className={`flex flex-col border-b border-sharp ${
+                phenomenaExpanded ? 'min-h-0 flex-1' : 'shrink-0'
+              }`}
+            >
+              <div className="flex shrink-0 items-center justify-between px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => handleSectionClick('phenomena')}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:opacity-80"
+                >
+                  <Chevron open={phenomenaExpanded} />
+                  <span className="eyebrow">Solar phenomena</span>
+                  <span className="font-mono text-[9px] text-ink-faint">{SOLAR_PHENOMENA.length}</span>
+                </button>
+              </div>
+              {phenomenaExpanded && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-28 lg:pb-2">
+                  {SOLAR_PHENOMENA.map((item) => (
+                    <div
+                      key={item.id}
+                      className="mb-1 rounded-md px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor:
+                              item.kind === 'sunspot'
+                                ? '#78716c'
+                                : item.kind === 'flare'
+                                  ? '#fb923c'
+                                  : item.kind === 'cme'
+                                    ? '#fde68a'
+                                    : '#fda4af',
+                          }}
+                        />
+                        <span className="truncate text-[13px] text-ink">{item.name}</span>
+                        <span className="ml-auto font-mono text-[9px] uppercase tracking-wide text-ink-faint">
+                          {item.kind}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-faint">
+                        {item.summary}
+                      </p>
+                    </div>
+                  ))}
+                  <p className="px-3 py-2 text-[9px] leading-relaxed text-ink-faint">
+                    Spot darkening and flare loops are illustrative — timed for archive viewing, not live solar weather.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {hasMoons && (
             <section
               className={`flex flex-col border-b border-sharp ${
@@ -253,7 +368,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                     onClick={handleFocusPlanet}
                     className="ml-2 shrink-0 rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-medium text-ink-faint transition hover:border-white/30 hover:text-ink"
                   >
-                    Focus {planet.name}
+                    Focus {hostPlanet?.name ?? planet.name}
                   </button>
                 )}
               </div>
@@ -292,6 +407,11 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
                   <p className="px-3 py-2 text-[9px] leading-relaxed text-ink-faint">
                     Real-time sidereal orbits from J2000 elements — motion is archive-accurate (nearly still over short views).
                   </p>
+                  {moonHostPlanetId === 'earth' && onFocusHostPlanet ? (
+                    <p className="px-3 pb-2 text-[9px] leading-relaxed text-ink-faint">
+                      Historical demo: use <span className="text-sky-200/90">Play Artemis II path</span> under the globe for Orion’s free-return flyby (launch → Earth loops → Moon → splashdown).
+                    </p>
+                  ) : null}
                 </div>
               )}
             </section>
@@ -372,6 +492,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
             </section>
           )}
 
+          {!isSun && (
           <section
             className={`flex flex-col ${
               missionsExpanded ? 'min-h-0 flex-1' : 'shrink-0 border-t border-sharp'
@@ -442,6 +563,7 @@ export function PlanetSidebar({ planet, missions }: PlanetSidebarProps) {
               </div>
             )}
           </section>
+          )}
         </div>
       </motion.aside>
     </>

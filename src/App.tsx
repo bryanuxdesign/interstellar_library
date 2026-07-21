@@ -11,6 +11,10 @@ const LunarLander = lazy(() =>
   import('@/pages/LunarLander').then((m) => ({ default: m.LunarLander })),
 );
 
+const MilkyWay = lazy(() =>
+  import('@/pages/MilkyWay').then((m) => ({ default: m.MilkyWay })),
+);
+
 const SolarSystem = lazy(() =>
   import('@/pages/SolarSystem').then((m) => ({ default: m.SolarSystem })),
 );
@@ -56,20 +60,6 @@ function DesktopOnlyLander() {
   return <LunarLander />;
 }
 
-function DesktopOnlySolarSystem() {
-  const isDesktop = useIsDesktop();
-  if (isDesktop === null) return <RouteFallback />;
-  if (!isDesktop) {
-    return (
-      <DesktopOnlyMessage
-        title="Solar System"
-        description="This 3D tour needs a wider screen. Open on a laptop or desktop (window ≥ 900px), or go back home."
-      />
-    );
-  }
-  return <SolarSystem />;
-}
-
 export default function App() {
   return (
     <BrowserRouter>
@@ -77,7 +67,11 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Gateway />} />
           <Route path="/lander" element={<DesktopOnlyLander />} />
-          <Route path="/solar-system" element={<DesktopOnlySolarSystem />} />
+          {/* Static tour routes before /:planetId */}
+          <Route path="/milky-way" element={<MilkyWay />} />
+          <Route path="/solar-system" element={<SolarSystem />} />
+          {/* Moon archive lives inside Earth — never a lone Moon globe. */}
+          <Route path="/moon" element={<Navigate to="/earth?focus=luna" replace />} />
           <Route path="/:planetId" element={<PlanetView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

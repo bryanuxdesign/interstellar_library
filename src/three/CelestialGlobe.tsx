@@ -1,13 +1,21 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { Box3, Group, Mesh, Vector3 } from 'three';
+import {
+  Box3,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  SRGBColorSpace,
+  Vector3,
+} from 'three';
 import { GLOBE_RADIUS } from './constants';
 
 /** NASA VTAD / Solar System GLB models, self-hosted under public/models/. */
 const PLANET_MODELS: Record<string, string> = {
   mercury: '/models/mercury.glb',
   venus: '/models/venus.glb',
+  earth: '/models/earth.glb',
   moon: '/models/moon.glb',
   mars: '/models/mars.glb',
   jupiter: '/models/jupiter.glb',
@@ -36,6 +44,30 @@ interface CelestialGlobeProps {
   rotationOffset?: number;
 }
 
+/** Tune NASA GLB materials so rocky worlds read as matte surfaces, not chrome. */
+function normalizeGlobeMaterials(root: Group, planetId: string) {
+  root.traverse((obj) => {
+    if (!(obj as Mesh).isMesh) return;
+    const mesh = obj as Mesh;
+    mesh.raycast = () => {};
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      if (!(mat instanceof MeshStandardMaterial)) continue;
+      if (mat.map) mat.map.colorSpace = SRGBColorSpace;
+      // Earth GLB ships with metallicFactor 0.25 — looks like brushed metal, not a planet.
+      if (planetId === 'earth') {
+        mat.metalness = 0;
+        mat.roughness = Math.max(mat.roughness, 0.72);
+        mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.04);
+        mat.emissive.set('#0a1520');
+      } else if (mat.metalness > 0.1) {
+        mat.metalness = 0;
+      }
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 export function CelestialGlobe({
   planetId = 'moon',
   autoRotate = false,
@@ -58,13 +90,9 @@ export function CelestialGlobe({
     const scale = (radius * 2) / maxDim;
     clone.scale.setScalar(scale);
     clone.position.copy(center.multiplyScalar(-scale));
-    clone.traverse((obj) => {
-      if ((obj as Mesh).isMesh) {
-        (obj as Mesh).raycast = () => {};
-      }
-    });
+    normalizeGlobeMaterials(clone, planetId);
     return clone;
-  }, [scene, radius]);
+  }, [scene, radius, planetId]);
 
   useFrame((_, delta) => {
     if (autoRotate && ref.current) {
@@ -88,4 +116,3 @@ export function GlobeFallback({ radius = GLOBE_RADIUS }: { radius?: number }) {
     </mesh>
   );
 }
-

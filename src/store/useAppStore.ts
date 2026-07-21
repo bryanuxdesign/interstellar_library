@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AssetStatus, Coordinates } from '@/types';
+import type { Artemis2CameraMode, Artemis2TimelineSpeed } from '@/data/demos/artemis2';
 import { getMissionById } from '@/data/missions';
 import { getOrbiterById } from '@/data/orbiters';
 import { getPlanet } from '@/data/planets';
@@ -35,6 +36,13 @@ interface AppState {
   chronologyReversed: boolean;
   /** Archive moon currently framing the camera (null = planet). */
   focusedMoonId: string | null;
+  /** One-shot Artemis II free-return demo on the Earth archive. */
+  artemis2DemoPlaying: boolean;
+  artemis2DemoPhase: string | null;
+  artemis2CameraMode: Artemis2CameraMode;
+  artemis2TimelineSpeed: Artemis2TimelineSpeed;
+  /** Archive Earth atmosphere FX: drifting clouds + 3D polar auroras. */
+  earthAtmosphereEnabled: boolean;
 
   setActivePlanet: (planetId: string | null) => void;
   setHoveredMission: (missionId: string | null) => void;
@@ -51,6 +59,13 @@ interface AppState {
   setMobileDossierExpanded: (expanded: boolean) => void;
   clearSurfacePreview: () => void;
   focusMoon: (moonId: string | null) => void;
+  startArtemis2Demo: () => void;
+  stopArtemis2Demo: () => void;
+  setArtemis2DemoPhase: (phase: string | null) => void;
+  setArtemis2CameraMode: (mode: Artemis2CameraMode) => void;
+  setArtemis2TimelineSpeed: (speed: Artemis2TimelineSpeed) => void;
+  setEarthAtmosphereEnabled: (enabled: boolean) => void;
+  toggleEarthAtmosphere: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -67,6 +82,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   mobileDossierExpanded: false,
   chronologyReversed: false,
   focusedMoonId: null,
+  artemis2DemoPlaying: false,
+  artemis2DemoPhase: null,
+  artemis2CameraMode: 'capsule',
+  artemis2TimelineSpeed: '2min',
+  earthAtmosphereEnabled: true,
 
   setActivePlanet: (planetId) => {
     if (get().activePlanetId === planetId) return;
@@ -83,18 +103,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       visibleStatuses: [...ALL_STATUSES],
       showOrbiters: true,
       focusedMoonId: null,
+      artemis2DemoPlaying: false,
+      artemis2DemoPhase: null,
     });
   },
 
   setHoveredMission: (missionId) => set({ hoveredMissionId: missionId }),
 
-  selectMission: (missionId) =>
-    set({ selectedMissionId: missionId, selectedOrbiterId: null, focusedMoonId: null }),
+  selectMission: (missionId) => {
+    const mission = missionId ? getMissionById(missionId) : undefined;
+    // Earth+Moon shared scene: keep camera on orbiting Luna while opening lunar dossiers.
+    const keepLuna =
+      get().focusedMoonId === 'luna' && mission?.planetId === 'moon';
+    set({
+      selectedMissionId: missionId,
+      selectedOrbiterId: null,
+      focusedMoonId: keepLuna ? 'luna' : null,
+    });
+  },
 
   setHoveredOrbiter: (orbiterId) => set({ hoveredOrbiterId: orbiterId }),
 
-  selectOrbiter: (orbiterId) =>
-    set({ selectedOrbiterId: orbiterId, selectedMissionId: null, focusedMoonId: null }),
+  selectOrbiter: (orbiterId) => {
+    const orbiter = orbiterId ? getOrbiterById(orbiterId) : undefined;
+    const keepLuna =
+      get().focusedMoonId === 'luna' && orbiter?.planetId === 'moon';
+    set({
+      selectedOrbiterId: orbiterId,
+      selectedMissionId: null,
+      focusedMoonId: keepLuna ? 'luna' : null,
+    });
+  },
 
   toggleShowOrbiters: () => set((s) => ({ showOrbiters: !s.showOrbiters })),
 
@@ -146,12 +185,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   resetFilters: () => set({ visibleStatuses: [...ALL_STATUSES] }),
 
-  flyTo: (coordinates, altitude = 1.35) =>
+  flyTo: (coordinates, altitude = 1.35) => {
+    // Preserve Luna camera focus on the shared Earth+Moon scene.
+    const keepLuna = get().focusedMoonId === 'luna';
     set({
       cameraTarget: { coordinates, altitude, token: Date.now() },
       lastFocus: { coordinates, altitude },
-      focusedMoonId: null,
-    }),
+      focusedMoonId: keepLuna ? 'luna' : null,
+    });
+  },
 
   focusMoon: (moonId) =>
     set({
@@ -160,6 +202,57 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedOrbiterId: null,
       // Cancel any pending lat/lng fly-to when framing a moon.
       cameraTarget: moonId ? null : get().cameraTarget,
+      // Moon focus interrupts the demo.
+      artemis2DemoPlaying: moonId ? false : get().artemis2DemoPlaying,
+      artemis2DemoPhase: moonId ? null : get().artemis2DemoPhase,
+    }),
+
+  startArtemis2Demo: () =>
+    set({
+      artemis2DemoPlaying: true,
+      artemis2DemoPhase: 'Liftoff · Kennedy Space Center',
+      focusedMoonId: null,
+      selectedMissionId: null,
+      selectedOrbiterId: null,
+      hoveredMissionId: null,
+      hoveredOrbiterId: null,
+      cameraTarget: null,
+      mobileDossierExpanded: false,
+    }),
+
+  stopArtemis2Demo: () =>
+    set({
+      artemis2DemoPlaying: false,
+      artemis2DemoPhase: null,
+    }),
+
+  setArtemis2DemoPhase: (phase) => set({ artemis2DemoPhase: phase }),
+
+  setArtemis2CameraMode: (mode) => set({ artemis2CameraMode: mode }),
+
+  setArtemis2TimelineSpeed: (speed) => set({ artemis2TimelineSpeed: speed }),
+
+  setEarthAtmosphereEnabled: (enabled) => set({ earthAtmosphereEnabled: enabled }),
+
+  toggleEarthAtmosphere: () =>
+    set((s) => {
+      const next = !s.earthAtmosphereEnabled;
+      // #region agent log
+      fetch('http://127.0.0.1:7748/ingest/92ebdb4b-815e-448e-88c6-e9201bea4257', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '70c770' },
+        body: JSON.stringify({
+          sessionId: '70c770',
+          runId: 'atm-1',
+          hypothesisId: 'H1-ATM-TOGGLE',
+          location: 'useAppStore.ts:toggleEarthAtmosphere',
+          message: 'User toggled atmosphere',
+          data: { from: s.earthAtmosphereEnabled, to: next },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return { earthAtmosphereEnabled: next };
     }),
 
   setActiveEvent: (eventId) => set({ activeEventId: eventId }),

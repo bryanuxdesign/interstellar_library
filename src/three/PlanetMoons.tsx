@@ -8,23 +8,31 @@ import {
   Group,
   LineBasicMaterial,
   LineLoop,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
   SphereGeometry,
   Vector3,
 } from 'three';
 import { GLOBE_RADIUS } from './constants';
 import {
-  findPlanetMoon,
   moonMeanAnomalyRad,
   moonsForPlanet,
   planetObliquityDeg,
   type PlanetMoonDef,
 } from '@/data/planetMoons';
 import { getPlanet } from '@/data/planets';
+import { getMissionsByPlanet } from '@/data/missions';
 import { daysSinceJ2000 } from '@/solar/ephemeris';
 import { useAppStore } from '@/store/useAppStore';
-import { clearMoonWorldPositions, setMoonWorldPosition } from './moonFocus';
+import { MissionPin } from '@/components/pins/MissionPin';
+import { OrbitalLayer } from '@/components/pins/OrbitalLayer';
+import {
+  clearMoonWorldPositions,
+  getArtemisLunaOverride,
+  setMoonWorldPose,
+} from './moonFocus';
 
 const ORBIT_SEGMENTS = 160;
 const MOON_MIN_RADIUS = 0.055;
@@ -33,11 +41,47 @@ const MOON_MAX_RADIUS = 0.28;
 const SIZE_EXAGGERATION = 10;
 const DEG = Math.PI / 180;
 
+/**
+ * True Earth–Moon distance ≈ 60.3 R⊕. Archive compresses Luna’s SMA to this many
+ * Earth radii so both bodies read as separate worlds with a clear gap, without
+ * making the Moon a speck at Earth overview. (Not glued to Earth’s surface.)
+ */
+const VISUAL_LUNA_EARTH_RADII = 28;
+
 const HIT_GEO = new SphereGeometry(1, 12, 12);
 
 function moonVisualRadius(def: PlanetMoonDef, planetRadiusKm: number): number {
   const trueRadius = GLOBE_RADIUS * (def.meanRadiusKm / planetRadiusKm);
   return Math.min(MOON_MAX_RADIUS, Math.max(MOON_MIN_RADIUS, trueRadius * SIZE_EXAGGERATION));
+}
+
+/** Scene-units orbit radius from parent centre (Luna uses compressed SMA). */
+function moonOrbitRadiusScene(def: PlanetMoonDef, planetRadiusKm: number): number {
+  if (def.id === 'luna') {
+    return GLOBE_RADIUS * VISUAL_LUNA_EARTH_RADII;
+  }
+  return GLOBE_RADIUS * (def.semiMajorKm / planetRadiusKm);
+}
+
+/** Align local +X toward Earth so selenographic 0° lng faces the parent (pins match). */
+function writeLunaOrientation(moonPos: Vector3, outQuat: Quaternion, scratch: {
+  x: Vector3;
+  y: Vector3;
+  z: Vector3;
+  up: Vector3;
+  m: Matrix4;
+}) {
+  scratch.x.copy(moonPos).normalize().multiplyScalar(-1);
+  scratch.up.set(0, 1, 0);
+  scratch.z.crossVectors(scratch.x, scratch.up);
+  if (scratch.z.lengthSq() < 1e-10) {
+    scratch.up.set(0, 0, 1);
+    scratch.z.crossVectors(scratch.x, scratch.up);
+  }
+  scratch.z.normalize();
+  scratch.y.crossVectors(scratch.z, scratch.x).normalize();
+  scratch.m.makeBasis(scratch.x, scratch.y, scratch.z);
+  outQuat.setFromRotationMatrix(scratch.m);
 }
 
 function scaleMoonModel(scene: Group, radiusScene: number) {
@@ -59,8 +103,10 @@ function scaleMoonModel(scene: Group, radiusScene: number) {
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const mat of mats) {
         if (mat instanceof MeshStandardMaterial) {
-          mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.12);
-          mat.emissive.set('#3a342c');
+          // Keep a faint fill so night sides aren’t pure black under realtime sun,
+          // but low enough that the lit hemisphere still reads.
+          mat.emissiveIntensity = Math.min(Math.max(mat.emissiveIntensity, 0.04), 0.06);
+          mat.emissive.set('#2a2620');
           mat.needsUpdate = true;
         }
       }
@@ -149,6 +195,37 @@ function makeOrbitLoop(
   );
 }
 
+/**
+ * Moon surface missions + orbiters mounted on the orbiting Luna mesh.
+ * Scaled from the primary-globe pin layout (GLOBE_RADIUS) onto the visual moon.
+ */
+function LunaArchiveLayer({ moonRadius }: { moonRadius: number }) {
+  const visibleStatuses = useAppStore((s) => s.visibleStatuses);
+  const selectedMissionId = useAppStore((s) => s.selectedMissionId);
+
+  const missions = useMemo(() => getMissionsByPlanet('moon'), []);
+  const visibleMissions = useMemo(
+    () => missions.filter((m) => visibleStatuses.includes(m.status)),
+    [missions, visibleStatuses],
+  );
+
+  const scale = moonRadius / GLOBE_RADIUS;
+
+  return (
+    <group scale={scale}>
+      <OrbitalLayer planetId="moon" />
+      {visibleMissions.map((mission) => (
+        <MissionPin
+          key={mission.id}
+          mission={mission}
+          traverse={null}
+          isSelected={selectedMissionId === mission.id}
+        />
+      ))}
+    </group>
+  );
+}
+
 function OrbitingMoon({
   def,
   planetRadiusKm,
@@ -161,15 +238,27 @@ function OrbitingMoon({
   const bodyRef = useRef<Group>(null);
   const worldScratch = useMemo(() => new Vector3(), []);
   const localScratch = useMemo(() => new Vector3(), []);
+  const quatScratch = useMemo(() => new Quaternion(), []);
+  const basisScratch = useMemo(
+    () => ({
+      x: new Vector3(),
+      y: new Vector3(),
+      z: new Vector3(),
+      up: new Vector3(),
+      m: new Matrix4(),
+    }),
+    [],
+  );
   const [hovered, setHovered] = useState(false);
 
   const focusedMoonId = useAppStore((s) => s.focusedMoonId);
   const focusMoon = useAppStore((s) => s.focusMoon);
   const selected = focusedMoonId === def.id;
+  const showLunaArchive = def.id === 'luna' && selected;
 
   const { scene } = useGLTF(def.modelUrl);
 
-  const orbitRadius = GLOBE_RADIUS * (def.semiMajorKm / planetRadiusKm);
+  const orbitRadius = moonOrbitRadiusScene(def, planetRadiusKm);
   const moonRadius = moonVisualRadius(def, planetRadiusKm);
 
   const model = useMemo(
@@ -184,15 +273,26 @@ function OrbitingMoon({
   const hitScale = Math.max(moonRadius * 3.2, 0.12);
 
   useFrame(() => {
-    // Realtime: wall-clock days since J2000 — no accelerated “zip” timescale.
-    const days = daysSinceJ2000(new Date());
-    writeMoonOffset(def, days, orbitRadius, obliquityRad, localScratch);
+    const lunaOverride = def.id === 'luna' ? getArtemisLunaOverride() : null;
+    if (lunaOverride) {
+      localScratch.copy(lunaOverride);
+    } else {
+      // Realtime: wall-clock days since J2000 — no accelerated “zip” timescale.
+      const days = daysSinceJ2000(new Date());
+      writeMoonOffset(def, days, orbitRadius, obliquityRad, localScratch);
+    }
     if (bodyRef.current) {
       bodyRef.current.position.copy(localScratch);
-      // Tidally locked: face parent (origin).
-      bodyRef.current.lookAt(0, 0, 0);
+      if (def.id === 'luna') {
+        writeLunaOrientation(localScratch, quatScratch, basisScratch);
+        bodyRef.current.quaternion.copy(quatScratch);
+      } else {
+        // Tidally locked: face parent (origin).
+        bodyRef.current.lookAt(0, 0, 0);
+      }
       bodyRef.current.getWorldPosition(worldScratch);
-      setMoonWorldPosition(def.id, worldScratch);
+      bodyRef.current.getWorldQuaternion(quatScratch);
+      setMoonWorldPose(def.id, worldScratch, quatScratch);
     }
   });
 
@@ -203,25 +303,29 @@ function OrbitingMoon({
       <primitive object={orbitLine} />
       <group ref={bodyRef}>
         <primitive object={model} />
-        <mesh
-          geometry={HIT_GEO}
-          scale={hitScale}
-          onClick={(e) => {
-            e.stopPropagation();
-            select();
-          }}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            setHovered(true);
-            document.body.style.cursor = 'pointer';
-          }}
-          onPointerOut={() => {
-            setHovered(false);
-            document.body.style.cursor = 'auto';
-          }}
-        >
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-        </mesh>
+        {showLunaArchive && <LunaArchiveLayer moonRadius={moonRadius} />}
+        {/* Hide pick sphere while Luna archive is open so surface pins receive clicks. */}
+        {!showLunaArchive && (
+          <mesh
+            geometry={HIT_GEO}
+            scale={hitScale}
+            onClick={(e) => {
+              e.stopPropagation();
+              select();
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              setHovered(true);
+              document.body.style.cursor = 'pointer';
+            }}
+            onPointerOut={() => {
+              setHovered(false);
+              document.body.style.cursor = 'auto';
+            }}
+          >
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        )}
         {(hovered || selected) && (
           <Html
             center
@@ -249,7 +353,7 @@ function OrbitingMoon({
 }
 
 /** Invisible globe hit — click parent to leave moon focus. */
-function PlanetReturnHit() {
+function PlanetReturnHit({ planetId }: { planetId: string }) {
   const focusedMoonId = useAppStore((s) => s.focusedMoonId);
   const focusMoon = useAppStore((s) => s.focusMoon);
   const flyTo = useAppStore((s) => s.flyTo);
@@ -265,6 +369,9 @@ function PlanetReturnHit() {
       onClick={(e) => {
         e.stopPropagation();
         focusMoon(null);
+        // Earth+Moon shared scene: PlanetView leave effect frames Earth overview.
+        // Do not flyTo lunar lat/lng at the origin.
+        if (planetId === 'earth') return;
         const altitude = lastFocus?.altitude ?? 2.4;
         const coords = lastFocus?.coordinates ?? { lat: 0, lng: 0 };
         flyTo(coords, altitude);
@@ -301,7 +408,7 @@ export function PlanetMoons({ planetId }: PlanetMoonsProps) {
 
   return (
     <group>
-      <PlanetReturnHit />
+      <PlanetReturnHit planetId={planetId} />
       {moons.map((moon) => (
         <OrbitingMoon
           key={moon.id}
@@ -320,14 +427,8 @@ export function preloadPlanetMoonModels(planetId: string) {
   }
 }
 
-/** Scene distance from moon centre for a comfortable close-up. */
-export function moonFocusDistance(moonId: string, planetId: string): number {
-  const def = findPlanetMoon(moonId);
-  const planetRadiusKm = getPlanet(planetId)?.radiusKm ?? 1737.4;
-  if (!def) return GLOBE_RADIUS * 1.2;
-  const r = moonVisualRadius(def, planetRadiusKm);
-  return Math.max(0.7, r * 4.2);
-}
+/** @deprecated Prefer moonFocusDistance from moonFocus.ts */
+export { moonFocusDistance, moonVisualRadiusFor } from './moonFocus';
 
 /** @deprecated Prefer PlanetMoons + preloadPlanetMoonModels */
 export function MarsMoons() {

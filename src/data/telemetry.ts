@@ -6,7 +6,17 @@ import { getTimelineYear } from './timeline';
  * Static footprint figures for bodies whose mission catalogue isn't wired up yet,
  * so the counters still show a real footprint instead of zeros.
  */
-const TELEMETRY_OVERRIDES: Record<string, Telemetry> = {};
+const TELEMETRY_OVERRIDES: Record<string, Telemetry> = {
+  sun: {
+    successfulLandings: 0,
+    activeAssets: 5,
+    impactSites: 0,
+    totalMassKg: 0,
+    agencies: 1,
+    firstEventYear: 1610,
+    latestEventYear: 2024,
+  },
+};
 
 /**
  * Live-computed global telemetry for a body's surface footprint. Feeds the

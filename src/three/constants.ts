@@ -46,6 +46,7 @@ export const SURFACE_LIFT = 0.015;
 export const PLANET_ROTATION_OFFSET: Record<string, number> = {
   mercury: 0,
   venus: 0,
+  earth: 0,
   moon: 0,
   mars: 0,
   jupiter: 0,

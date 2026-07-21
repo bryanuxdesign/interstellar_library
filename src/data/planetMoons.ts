@@ -35,6 +35,7 @@ export interface PlanetMoonDef {
  * Mars value is spin-axis obliquity; gas/ice giants match ring/equator tilts.
  */
 export const PLANET_OBLIQUITY_DEG: Record<string, number> = {
+  earth: 23.44,
   mars: 25.19,
   jupiter: 3.13,
   saturn: 26.73,
@@ -43,6 +44,21 @@ export const PLANET_OBLIQUITY_DEG: Record<string, number> = {
 };
 
 export const PLANET_MOONS: PlanetMoonDef[] = [
+  // —— Earth ——
+  {
+    id: 'luna',
+    name: 'Moon',
+    parentPlanetId: 'earth',
+    modelUrl: '/models/moon.glb',
+    semiMajorKm: 384400,
+    periodHours: 655.72,
+    inclinationDeg: 5.145,
+    longitudeOfAscendingNodeDeg: 0,
+    argPeriapsisDeg: 0,
+    meanAnomalyAtJ2000Deg: 120,
+    meanRadiusKm: 1737.4,
+  },
+
   // —— Mars ——
   {
     id: 'phobos',

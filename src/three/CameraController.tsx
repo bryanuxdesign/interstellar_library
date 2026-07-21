@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useAppStore } from '@/store/useAppStore';
+import { useTouchPrimary } from '@/utils/useTouchPrimary';
 import { latLngToVector3 } from './coordinateUtils';
 import { DEFAULT_CAMERA_DISTANCE, GLOBE_RADIUS } from './constants';
 import { maxCameraDistanceForPlanet } from './orbitPropagation';
-import { getMoonWorldPosition } from './moonFocus';
-import { moonFocusDistance } from './PlanetMoons';
+import { getMoonWorldPosition, getMoonWorldQuaternion, moonFocusDistance, moonVisualRadiusFor } from './moonFocus';
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
@@ -25,6 +25,8 @@ export function CameraController({ planetId }: CameraControllerProps) {
   const { camera, gl } = useThree();
   const cameraTarget = useAppStore((s) => s.cameraTarget);
   const focusedMoonId = useAppStore((s) => s.focusedMoonId);
+  const artemis2DemoPlaying = useAppStore((s) => s.artemis2DemoPlaying);
+  const touchPrimary = useTouchPrimary();
 
   const maxDistance = useMemo(
     () => Math.max(DEFAULT_CAMERA_DISTANCE + 2, maxCameraDistanceForPlanet(planetId)),
@@ -34,16 +36,38 @@ export function CameraController({ planetId }: CameraControllerProps) {
   const desired = useRef<Vector3 | null>(null);
   const userControlling = useRef(false);
   const smoothedTarget = useRef(new Vector3());
-  const followOffset = useRef(new Vector3(0, 0.35, 1.1));
-  const offsetDir = useRef(new Vector3(0.25, 0.4, 0.85).normalize());
+  /** Unit direction from moon centre → camera, in moon-local space. */
+  const moonLocalDir = useRef(new Vector3(0.25, 0.4, 0.85).normalize());
+  const moonViewDist = useRef(1.2);
   const flyToMoon = useRef(false);
   const lastFocusedMoon = useRef<string | null>(null);
+  const lastSurfaceToken = useRef<number | null>(null);
   const moonPosScratch = useRef(new Vector3());
   const goalScratch = useRef(new Vector3());
+  const worldDirScratch = useRef(new Vector3());
+  const invQuatScratch = useRef(new Quaternion());
 
-  // Lat/lng fly-to (missions / overview) — only when not moon-focused.
+  const trackingMoon = Boolean(focusedMoonId);
+
+  // Disable orbit while the Artemis II cinematic owns the camera.
   useEffect(() => {
-    if (focusedMoonId || !cameraTarget || userControlling.current) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    if (artemis2DemoPlaying) {
+      controls.enabled = false;
+      desired.current = null;
+      userControlling.current = false;
+    } else {
+      controls.enabled = true;
+    }
+  }, [artemis2DemoPlaying]);
+
+  // Lat/lng fly-to on the primary globe — only when not tracking an orbiting moon.
+  useEffect(() => {
+    if (artemis2DemoPlaying || trackingMoon || !cameraTarget) return;
+    // Programmatic flyTo always wins over a stuck OrbitControls drag lock
+    // (common after moon follow enables controls without an onEnd).
+    userControlling.current = false;
     const normal = latLngToVector3(cameraTarget.coordinates, 1).normalize();
     const distance = GLOBE_RADIUS + cameraTarget.altitude * GLOBE_RADIUS;
     const dest = normal.multiplyScalar(distance);
@@ -62,85 +86,111 @@ export function CameraController({ planetId }: CameraControllerProps) {
       }
       smoothedTarget.current.copy(PLANET_TARGET);
     }
-  }, [cameraTarget, camera, focusedMoonId]);
+  }, [cameraTarget, camera, trackingMoon, artemis2DemoPlaying]);
 
-  // Start moon fly-to when focusedMoonId changes.
+  // Start moon fly-to when tracking an orbiting moon.
   useEffect(() => {
-    if (focusedMoonId === lastFocusedMoon.current) return;
-    lastFocusedMoon.current = focusedMoonId;
-    desired.current = null;
+    const trackId = trackingMoon ? focusedMoonId : null;
+    if (trackId === lastFocusedMoon.current) return;
+    lastFocusedMoon.current = trackId;
     userControlling.current = false;
+    lastSurfaceToken.current = null;
 
     const controls = controlsRef.current;
-    if (focusedMoonId) {
+    if (trackId) {
+      // Entering moon — cancel any planet fly-to.
+      desired.current = null;
       flyToMoon.current = true;
-      const fromCam = camera.position.clone().sub(smoothedTarget.current);
-      if (fromCam.lengthSq() > 0.01) {
-        offsetDir.current.copy(fromCam).normalize();
-      } else {
-        offsetDir.current.set(0.25, 0.4, 0.85).normalize();
-      }
+      moonLocalDir.current.set(0.25, 0.4, 0.85).normalize();
+      moonViewDist.current = moonFocusDistance(trackId, planetId);
       if (controls) controls.enabled = false;
     } else {
       flyToMoon.current = false;
-      const last = useAppStore.getState().lastFocus;
-      if (last) {
-        const normal = latLngToVector3(last.coordinates, 1).normalize();
-        const distance = GLOBE_RADIUS + last.altitude * GLOBE_RADIUS;
-        desired.current = normal.multiplyScalar(distance);
-      }
+      // Leaving moon — do NOT clear desired. PlanetView's leave flyTo may have
+      // already written the Earth overview target in the same commit.
+      userControlling.current = false;
       if (controls) {
         controls.enabled = true;
         controls.target.copy(PLANET_TARGET);
       }
       smoothedTarget.current.copy(PLANET_TARGET);
     }
-  }, [focusedMoonId, camera]);
+  }, [trackingMoon, focusedMoonId, camera, planetId]);
+
+  // Mission / orbiter fly-to while focused on an orbiting moon (e.g. Luna archive).
+  useEffect(() => {
+    if (!trackingMoon || !focusedMoonId || !cameraTarget) return;
+    if (cameraTarget.token === lastSurfaceToken.current) return;
+    lastSurfaceToken.current = cameraTarget.token;
+
+    const quat = getMoonWorldQuaternion(focusedMoonId);
+    if (!quat) return;
+
+    const local = latLngToVector3(cameraTarget.coordinates, 1).normalize();
+    moonLocalDir.current.copy(local);
+    const r = moonVisualRadiusFor(focusedMoonId, planetId);
+    moonViewDist.current = Math.max(r * 1.2, r * (1 + cameraTarget.altitude));
+    flyToMoon.current = true;
+    userControlling.current = false;
+    if (controlsRef.current) controlsRef.current.enabled = false;
+  }, [cameraTarget, trackingMoon, focusedMoonId, planetId]);
 
   useFrame(() => {
     const controls = controlsRef.current;
     if (!controls) return;
+    if (artemis2DemoPlaying) return;
 
-    if (focusedMoonId) {
+    if (trackingMoon && focusedMoonId) {
       const moonPos = getMoonWorldPosition(focusedMoonId);
-      if (!moonPos) return;
+      const moonQuat = getMoonWorldQuaternion(focusedMoonId);
+      if (!moonPos || !moonQuat) return;
 
       moonPosScratch.current.copy(moonPos);
       smoothedTarget.current.lerp(moonPosScratch.current, flyToMoon.current ? 0.18 : 0.28);
       controls.target.copy(smoothedTarget.current);
 
-      const dist = moonFocusDistance(focusedMoonId, planetId);
+      const dist = moonViewDist.current;
       controls.minDistance = Math.max(0.35, dist * 0.45);
       controls.maxDistance = Math.max(maxDistance, dist * 10);
 
+      worldDirScratch.current.copy(moonLocalDir.current).applyQuaternion(moonQuat);
       goalScratch.current
         .copy(moonPosScratch.current)
-        .addScaledVector(offsetDir.current, dist);
+        .addScaledVector(worldDirScratch.current, dist);
 
       if (flyToMoon.current && !userControlling.current) {
         controls.enabled = false;
         if (prefersReducedMotion) {
           camera.position.copy(goalScratch.current);
           flyToMoon.current = false;
-          followOffset.current.copy(camera.position).sub(smoothedTarget.current);
           controls.enabled = true;
         } else {
           camera.position.lerp(goalScratch.current, 0.12);
           camera.lookAt(smoothedTarget.current);
           if (camera.position.distanceTo(goalScratch.current) < 0.15) {
             flyToMoon.current = false;
-            followOffset.current.copy(camera.position).sub(smoothedTarget.current);
             controls.enabled = true;
           }
         }
       } else if (userControlling.current) {
         controls.enabled = true;
         controls.update();
-        followOffset.current.copy(camera.position).sub(smoothedTarget.current);
+        // Bake orbit drag back into moon-local follow state.
+        worldDirScratch.current.copy(camera.position).sub(smoothedTarget.current);
+        const len = worldDirScratch.current.length();
+        if (len > 1e-4) {
+          moonViewDist.current = len;
+          invQuatScratch.current.copy(moonQuat).invert();
+          moonLocalDir.current
+            .copy(worldDirScratch.current)
+            .multiplyScalar(1 / len)
+            .applyQuaternion(invQuatScratch.current)
+            .normalize();
+        }
       } else {
-        // Rigid follow while the moon orbits.
+        // Rigid follow in moon-local space while the moon orbits / librates.
         controls.enabled = true;
-        camera.position.copy(smoothedTarget.current).add(followOffset.current);
+        camera.position.copy(goalScratch.current);
         camera.lookAt(smoothedTarget.current);
         controls.object.position.copy(camera.position);
         controls.target.copy(smoothedTarget.current);
@@ -161,7 +211,9 @@ export function CameraController({ planetId }: CameraControllerProps) {
     }
 
     controls.enabled = false;
-    camera.position.lerp(desired.current, 0.06);
+    // Faster catch-up when returning from a distant moon (Luna ~28 R⊕).
+    const catchUp = camera.position.distanceTo(desired.current) > 8 ? 0.14 : 0.06;
+    camera.position.lerp(desired.current, catchUp);
     camera.lookAt(PLANET_TARGET);
     if (camera.position.distanceTo(desired.current) < 0.02) {
       desired.current = null;
@@ -178,21 +230,18 @@ export function CameraController({ planetId }: CameraControllerProps) {
       enablePan={false}
       enableDamping
       dampingFactor={0.08}
-      rotateSpeed={0.45}
-      zoomSpeed={0.7}
+      rotateSpeed={touchPrimary ? 0.6 : 0.45}
+      zoomSpeed={touchPrimary ? 0.95 : 0.7}
       minDistance={GLOBE_RADIUS + 0.35}
       maxDistance={maxDistance}
       onStart={() => {
         userControlling.current = true;
         desired.current = null;
-        if (focusedMoonId) flyToMoon.current = false;
+        if (trackingMoon) flyToMoon.current = false;
       }}
       onEnd={() => {
         window.setTimeout(() => {
           userControlling.current = false;
-          if (focusedMoonId) {
-            followOffset.current.copy(camera.position).sub(smoothedTarget.current);
-          }
           controlsRef.current?.update();
         }, 120);
       }}

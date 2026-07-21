@@ -40,7 +40,13 @@ export function maxCameraDistanceForPlanet(planetId: string): number {
   }
 
   for (const moon of moonsForPlanet(planetId)) {
-    maxApoKm = Math.max(maxApoKm, Math.abs(moon.semiMajorKm));
+    // Luna uses a compressed visual SMA in PlanetMoons (~28 R⊕); match that
+    // so max zoom frames the shared Earth+Moon scene rather than true 60 R⊕.
+    if (moon.id === 'luna') {
+      maxApoKm = Math.max(maxApoKm, planetRadiusKm * 28);
+    } else {
+      maxApoKm = Math.max(maxApoKm, Math.abs(moon.semiMajorKm));
+    }
   }
 
   const maxSceneRadius = GLOBE_RADIUS * (maxApoKm / planetRadiusKm);

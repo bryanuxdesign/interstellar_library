@@ -96,7 +96,10 @@ export function Gateway() {
     const planet = getPlanet(planetId);
     if (!planet?.available) return;
     setDepartingId(planetId);
-    window.setTimeout(() => navigate(`/${planetId}`), 650);
+    // Moon opens inside the unified Earth+Moon archive.
+    const href =
+      planetId === 'moon' ? '/earth?focus=luna' : `/${planetId}`;
+    window.setTimeout(() => navigate(href), 650);
   };
 
   const handlePlanetSelect = (planetId: string) => {
@@ -149,21 +152,25 @@ export function Gateway() {
         </div>
         <div className="pointer-events-auto flex flex-col items-end gap-2">
           <CreatorAboutButton />
+          <Link
+            to="/milky-way"
+            className="eyebrow text-ink-faint transition hover:text-active"
+          >
+            Milky Way →
+          </Link>
+          <Link
+            to="/solar-system"
+            className="eyebrow text-ink-faint transition hover:text-active"
+          >
+            Sol System →
+          </Link>
           {isDesktop !== false ? (
-            <>
-              <Link
-                to="/solar-system"
-                className="eyebrow text-ink-faint transition hover:text-active"
-              >
-                Solar System →
-              </Link>
-              <Link
-                to="/lander"
-                className="eyebrow text-ink-faint transition hover:text-active"
-              >
-                Lunar Descent →
-              </Link>
-            </>
+            <Link
+              to="/lander"
+              className="eyebrow text-ink-faint transition hover:text-active"
+            >
+              Lunar Descent →
+            </Link>
           ) : null}
           <nav
             className="mt-1 flex max-w-[min(92vw,420px)] flex-wrap justify-end gap-x-2.5 gap-y-1"
@@ -171,8 +178,10 @@ export function Gateway() {
           >
             {(
               [
+                ['sun', 'Sun'],
                 ['mercury', 'Mercury'],
                 ['venus', 'Venus'],
+                ['earth', 'Earth'],
                 ['mars', 'Mars'],
                 ['jupiter', 'Jupiter'],
                 ['saturn', 'Saturn'],
@@ -188,6 +197,12 @@ export function Gateway() {
                 {label}
               </Link>
             ))}
+            <Link
+              to="/earth?focus=luna"
+              className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint/70 transition hover:text-active"
+            >
+              Moon
+            </Link>
           </nav>
           <span className="eyebrow hidden sm:block">MISSION CONTROL // v0.1</span>
         </div>

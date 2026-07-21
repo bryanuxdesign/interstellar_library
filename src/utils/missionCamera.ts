@@ -11,14 +11,19 @@ const PLANET_FOV_DEG = 45;
  * Camera altitude multiplier so the full globe fits with ~20% padding on each side.
  * `altitude` maps to camera distance = GLOBE_RADIUS * (1 + altitude).
  */
-export function planetOverviewAltitude(viewportAspect = 1): number {
+export function planetOverviewAltitude(viewportAspect = 1, fill = 0.6): number {
   const halfFov = (PLANET_FOV_DEG * Math.PI) / 360;
   const sinHalf = Math.sin(halfFov);
   const distVertical = GLOBE_RADIUS / sinHalf;
   const distHorizontal = GLOBE_RADIUS / (sinHalf * Math.max(viewportAspect, 0.4));
   const fitDist = Math.max(distVertical, distHorizontal);
-  const paddedDist = fitDist / 0.6;
+  const paddedDist = fitDist / Math.min(Math.max(fill, 0.35), 0.95);
   return paddedDist / GLOBE_RADIUS - 1;
+}
+
+/** Earth overview — globe dominates (~70% of the shorter viewport axis). */
+export function earthOverviewAltitude(viewportAspect = 1): number {
+  return planetOverviewAltitude(viewportAspect, 0.72);
 }
 
 /** Moderate zoom when closing mobile dossier — keeps asset in frame on full globe. */

@@ -16,6 +16,10 @@ export const URANUS_TEXTURE_URL = '/images/planets/uranus.jpg';
 
 export const NEPTUNE_TEXTURE_URL = '/images/planets/neptune.jpg';
 
+export const EARTH_TEXTURE_URL = '/images/planets/earth.jpg';
+
+export const SUN_TEXTURE_URL = '/images/planets/sun.jpg';
+
 /** Left-to-right order on the Gateway home screen. */
 export const GATEWAY_PLANET_ORDER = ['venus', 'moon', 'mars'] as const;
 
@@ -23,10 +27,19 @@ export const GATEWAY_PLANET_ORDER = ['venus', 'moon', 'mars'] as const;
 export const GATEWAY_CARD_ORDER = ['moon', 'mars', 'venus'] as const;
 
 /**
- * Bodies with a full 3D archive globe. Earth is intentionally omitted for now.
+ * Bodies with a full 3D archive globe.
  * Mission catalogues exist for moon / mars / venus; other worlds are globe-first.
+ * Moon surface archive is reached via `/earth?focus=luna` (unified Earth+Moon page).
  */
 export const planets: CelestialBody[] = [
+  {
+    id: 'sun',
+    name: 'The Sun',
+    subtitle: 'Sol · Our Star',
+    radiusKm: 695700,
+    textureUrl: SUN_TEXTURE_URL,
+    available: true,
+  },
   {
     id: 'mercury',
     name: 'Mercury',
@@ -44,11 +57,20 @@ export const planets: CelestialBody[] = [
     available: true,
   },
   {
+    id: 'earth',
+    name: 'Earth',
+    subtitle: 'Sol III · Home',
+    radiusKm: 6371,
+    textureUrl: EARTH_TEXTURE_URL,
+    available: true,
+  },
+  {
     id: 'moon',
     name: 'The Moon',
     subtitle: 'Earth I · Luna',
     radiusKm: 1737.4,
     textureUrl: MOON_TEXTURE_URL,
+    /** Gateway still features the Moon; archive opens inside `/earth?focus=luna`. */
     available: true,
   },
   {

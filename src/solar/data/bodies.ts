@@ -40,10 +40,12 @@ export interface SolarBody {
   auDistance?: number;
   /** Gentle orbital inclination in radians (NASA Eyes–style disk with subtle tilt). */
   inclination?: number;
-  /** Deep-link into the Archive 3D globe (Earth deferred). */
+  /** Deep-link into the Archive 3D globe. */
   archivePlanetId?:
+    | 'sun'
     | 'mercury'
     | 'venus'
+    | 'earth'
     | 'moon'
     | 'mars'
     | 'jupiter'
@@ -87,6 +89,7 @@ export const SOLAR_BODIES: SolarBody[] = [
     size: 0.48,
     color: '#ffb347',
     fact: 'The Sun carries the entire planetary system with it through the Milky Way at ~220 km/s relative to the galactic center.',
+    archivePlanetId: 'sun',
   },
   {
     id: 'mercury',
@@ -119,7 +122,7 @@ export const SOLAR_BODIES: SolarBody[] = [
     size: 0.08,
     color: '#4a90d9',
     fact: 'Home world — oceans, life, and one large Moon in the Archive catalogue.',
-    archivePlanetId: 'moon',
+    archivePlanetId: 'earth',
   },
   {
     id: 'mars',
